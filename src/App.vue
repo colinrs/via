@@ -37,6 +37,12 @@ const selectedSession = computed(() => store.sessions.find((session) => session.
 const currentRules = computed(() => store.rules.filter((rule) => rule.sessionId === selectedSessionId.value))
 const activeCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'active').length)
 const errorCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'conflict' || rule.runtimeState === 'failed').length)
+const backendStatus = computed(() => {
+  if (statusError.value) return statusError.value
+  if (store.initializationState === 'connecting') return '正在连接本地后端…'
+  if (store.initializationState === 'failed') return '无法连接本地后端'
+  return 'Rust backend: SQLite local mode'
+})
 
 async function persist() { try { await store.save(); statusError.value = ''; return true } catch { statusError.value = '保存失败，请检查会话和规则填写是否完整。'; return false } }
 async function updateRule(nextRule: LocalForwardRule) { const index = store.rules.findIndex((rule) => rule.id === nextRule.id); if (index >= 0) store.rules.splice(index, 1, nextRule); await persist() }
@@ -84,7 +90,7 @@ async function removeSession() {
   }
 }
 
-onMounted(async () => { try { await store.initialize(); selectedSessionId.value = store.sessions[0]?.id ?? null } catch { statusError.value = '无法连接本地后端。' } })
+onMounted(async () => { try { await store.initialize(); selectedSessionId.value = store.sessions[0]?.id ?? null } catch {} })
 </script>
 
 <template>
@@ -105,7 +111,7 @@ onMounted(async () => { try { await store.initialize(); selectedSessionId.value 
       </section>
       <EmptyWorkspace v-else @create="requestCreateSession" />
     </div>
-    <footer class="statusbar"><span><i class="live-dot" />{{ statusError || 'Rust backend: SQLite local mode' }}</span><span>隧道：{{ activeCount }} 运行中 / {{ errorCount }} 异常</span></footer>
+    <footer class="statusbar"><span><i class="live-dot" />{{ backendStatus }}</span><span>隧道：{{ activeCount }} 运行中 / {{ errorCount }} 异常</span></footer>
     <ImportDialog :open="importMode!==null" :mode="importMode ?? 'import'" :export-json="exportedJson" @close="importMode=null" @confirm="transfer" />
     <SecretUnlockDialog :open="unlockOpen" @close="unlockOpen=false" @unlock="unlock" />
     <HostTrustDialog :open="hostTrust!==null" :host="hostTrust?.host ?? ''" :port="hostTrust?.port ?? 22" :algorithm="hostTrust?.algorithm ?? ''" :fingerprint="hostTrust?.fingerprint ?? ''" @close="hostTrust=null" @approve="approveHostTrust" />

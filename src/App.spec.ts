@@ -22,6 +22,27 @@ function mountAppWithGroups(groups: Array<{ id: string; name: string }>) {
   return flushPromises().then(() => wrapper)
 }
 
+function mountAppWithPendingConfig() {
+  invoke.mockImplementation((command: string) => {
+    if (command === 'load_config') return new Promise<never>(() => undefined)
+    return Promise.resolve(undefined)
+  })
+  listen.mockResolvedValue(() => undefined)
+
+  return mount(App)
+}
+
+function mountAppWithListenerFailure() {
+  invoke.mockImplementation(async (command: string) => {
+    if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+    return undefined
+  })
+  listen.mockRejectedValue(new Error('listener unavailable'))
+
+  const wrapper = mount(App)
+  return flushPromises().then(() => wrapper)
+}
+
 describe('App', () => {
   it('renders the tunnel management workspace', () => {
     const wrapper = mount(App)
@@ -38,5 +59,19 @@ describe('App', () => {
     await wrapper.get('select[aria-label="所属分组"]').setValue('prod')
     await wrapper.get('[data-testid="create-session-action"]').trigger('click')
     expect(wrapper.findAll('.session-group')[1].text()).toContain('未命名 SSH 会话')
+  })
+
+  it('shows a connecting status while startup retries the local backend', async () => {
+    const wrapper = mountAppWithPendingConfig()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('.statusbar').text()).toContain('正在连接本地后端')
+  })
+
+  it('shows a failed status when initialization cannot register the runtime listener', async () => {
+    const wrapper = await mountAppWithListenerFailure()
+
+    expect(wrapper.get('.statusbar').text()).toContain('无法连接本地后端')
+    expect(wrapper.get('.statusbar').text()).not.toContain('无法连接本地后端。')
   })
 })

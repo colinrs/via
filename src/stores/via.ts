@@ -71,38 +71,40 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
   return Object.assign(state, {
     async initialize() {
       state.initializationState = 'connecting'
-      let config: PersistedConfig | undefined
-      let lastError: unknown
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-          config = await runtime.invoke<PersistedConfig>('load_config')
-          break
-        } catch (error) {
-          lastError = error
-          if (attempt < 2) await new Promise<void>((resolve) => window.setTimeout(resolve, 500))
-        }
-      }
-      if (!config) {
-        state.initializationState = 'failed'
-        throw lastError
-      }
-      replace(state.groups, config.groups)
-      replace(state.sessions, config.sessions)
-      replace(state.rules, config.rules)
-      if (!unsubscribe) {
-        unsubscribe = await runtime.listen<RuntimeSnapshot>('runtime-state', (runtime) => {
-          for (const update of runtime.rules) {
-            const rule = state.rules.find((item) => item.id === update.ruleId)
-            if (rule) {
-              rule.runtimeState = update.state
-              if (update.state === 'reconnecting') scheduleReconnect(rule.sessionId)
-            }
+      try {
+        let config: PersistedConfig | undefined
+        let lastError: unknown
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            config = await runtime.invoke<PersistedConfig>('load_config')
+            break
+          } catch (error) {
+            lastError = error
+            if (attempt < 2) await new Promise<void>((resolve) => window.setTimeout(resolve, 500))
           }
-        })
-        window.setInterval(() => { void runtime.invoke('poll_transports').catch(() => undefined) }, 2_000)
+        }
+        if (!config) throw lastError
+        replace(state.groups, config.groups)
+        replace(state.sessions, config.sessions)
+        replace(state.rules, config.rules)
+        if (!unsubscribe) {
+          unsubscribe = await runtime.listen<RuntimeSnapshot>('runtime-state', (runtime) => {
+            for (const update of runtime.rules) {
+              const rule = state.rules.find((item) => item.id === update.ruleId)
+              if (rule) {
+                rule.runtimeState = update.state
+                if (update.state === 'reconnecting') scheduleReconnect(rule.sessionId)
+              }
+            }
+          })
+          window.setInterval(() => { void runtime.invoke('poll_transports').catch(() => undefined) }, 2_000)
+        }
+        state.initialized = true
+        state.initializationState = 'ready'
+      } catch (error) {
+        state.initializationState = 'failed'
+        throw error
       }
-      state.initialized = true
-      state.initializationState = 'ready'
     },
     async save() {
       await runtime.invoke('save_config', { config: snapshot() })

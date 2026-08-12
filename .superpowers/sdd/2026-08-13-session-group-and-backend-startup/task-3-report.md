@@ -50,3 +50,29 @@ vue-tsc --noEmit
 ## Concerns
 
 无已知问题。`initialize()` 原本未定义并发或重复调用语义，本任务保持该行为不变。
+
+## Review Fix: runtime-state listener failure
+
+### RED 证据
+
+新增 `fails initialization when the runtime-state listener cannot be registered` 后执行 `npm test -- src/stores/via.spec.ts`：5 个测试中 1 个失败。`load_config` 成功而 `runtime.listen('runtime-state', ...)` 拒绝时，初始化 Promise 正确抛出 `listener unavailable`，但状态错误地保留为 `connecting`，期望为 `failed`。
+
+### 修复与 GREEN 证据
+
+- 将配置替换、runtime-state 监听注册及 ready 状态设置纳入整体初始化 `try/catch`；任何该阶段的错误都会在重新抛出前写入 `initializationState = 'failed'`。
+- `load_config` 的三次重试及两次 500ms 等待仍局限于其原有循环，监听注册失败不会触发重试。
+
+重新执行：
+
+```text
+npm test -- src/stores/via.spec.ts
+Test Files  1 passed (1)
+Tests       5 passed (5)
+
+npm run typecheck
+vue-tsc --noEmit
+```
+
+### 自检与 Concerns
+
+监听注册失败时，测试同时验证 rejection 与终态 `failed`。原有 runtime-state 回调、轮询间隔和重连代码的内容与执行顺序保持不变；无新增已知问题。

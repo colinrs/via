@@ -42,6 +42,19 @@ describe('ViaStore', () => {
     }
   })
 
+  it('fails initialization when the runtime-state listener cannot be registered', async () => {
+    const store = createViaStore({
+      invoke: vi.fn().mockResolvedValue({ schemaVersion: 1, groups: [], sessions: [], rules: [] }),
+      listen: vi.fn().mockRejectedValue(new Error('listener unavailable')),
+    } as ViaBridge)
+
+    const initialized = store.initialize()
+    void initialized.catch(() => undefined)
+
+    await expect(initialized).rejects.toThrow('listener unavailable')
+    expect(store.initializationState).toBe('failed')
+  })
+
   it('starts enabled rules through the selected session command', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined)
     const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)

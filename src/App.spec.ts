@@ -10,6 +10,21 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen }))
 
 import App from './App.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+function openConfirmDialog(wrapper: ReturnType<typeof mount>) {
+  return wrapper.findAllComponents(ConfirmDialog).find((dialog) => dialog.props('open'))!
+}
 
 function mountAppWithGroups(groups: Array<{ id: string; name: string }>) {
   invoke.mockImplementation(async (command: string) => {
@@ -47,10 +62,11 @@ function mountAppWithConfig(config: {
   groups: Array<{ id: string; name: string }>
   sessions: ReturnType<typeof session>[]
   rules: ReturnType<typeof rule>[]
-}, commandFailures: string | string[] = []) {
+}, commandFailures: string | string[] = [], commandHandlers: Record<string, () => Promise<unknown>> = {}) {
   const failures = new Set(Array.isArray(commandFailures) ? commandFailures : [commandFailures])
   invoke.mockImplementation(async (command: string) => {
     if (command === 'load_config') return { schemaVersion: 1, ...config }
+    if (commandHandlers[command]) return commandHandlers[command]()
     if (failures.has(command)) throw new Error(`${command} failed`)
     return command === 'secret_store_status' ? { configured: true } : undefined
   })
@@ -176,6 +192,32 @@ describe('App', () => {
     expect(wrapper.find('[title="删除规则"]').exists()).toBe(false)
   })
 
+  it('keeps a failed rule deletion pending when cancel and confirm are repeated in flight', async () => {
+    const pendingDelete = deferred()
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [rule('rule-a', 'session-a')],
+    }, [], { delete_rule: () => pendingDelete.promise })
+    await wrapper.get('[title="删除规则"]').trigger('click')
+    const deletesBeforeConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_rule').length
+
+    await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
+    const dialog = openConfirmDialog(wrapper)
+    dialog.vm.$emit('close')
+    dialog.vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+
+    expect(dialog.props('busy')).toBe(true)
+    expect(invoke.mock.calls.filter(([command]) => command === 'delete_rule')).toHaveLength(deletesBeforeConfirm + 1)
+
+    pendingDelete.reject(new Error('delete failed'))
+    await flushPromises()
+    expect(wrapper.get('[role="dialog"]').text()).toContain('删除转发规则')
+    expect(wrapper.get('[title="删除规则"]')).toBeTruthy()
+    expect(wrapper.get('.statusbar').text()).toContain('删除规则失败，请重试。')
+  })
+
   it('confirms a group cascade with exact session and rule counts before deleting', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }, { id: 'group-b', name: '分组 B' }],
@@ -252,6 +294,72 @@ describe('App', () => {
     expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(false)
   })
 
+  it('keeps a failed group deletion pending when cancel and confirm are repeated in flight', async () => {
+    const pendingDelete = deferred()
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [rule('rule-a', 'session-a')],
+    }, [], { delete_group: () => pendingDelete.promise })
+    await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
+    const deletesBeforeConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_group').length
+
+    await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
+    await flushPromises()
+    const dialog = openConfirmDialog(wrapper)
+    dialog.vm.$emit('close')
+    dialog.vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+
+    expect(dialog.props('busy')).toBe(true)
+    expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeConfirm + 1)
+
+    pendingDelete.reject(new Error('delete failed'))
+    await flushPromises()
+    expect(wrapper.get('[role="dialog"]').text()).toContain('删除分组')
+    expect(wrapper.get('[data-testid="group-toggle-group-a"]')).toBeTruthy()
+    expect(wrapper.get('.statusbar').text()).toContain('删除分组失败，请重试。')
+  })
+
+  it('uses current group membership at confirmation so concurrent additions leave no orphans', async () => {
+    const newSessionId = '00000000-0000-4000-8000-000000000001'
+    const newRuleId = '00000000-0000-4000-8000-000000000002'
+    const randomId = vi.spyOn(crypto, 'randomUUID')
+      .mockReturnValueOnce(newSessionId)
+      .mockReturnValueOnce(newRuleId)
+    try {
+      const wrapper = await mountAppWithConfig({
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      })
+      await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
+
+      await wrapper.get('.create-session').trigger('click')
+      await wrapper.get('[data-testid="create-session-action"]').trigger('click')
+      await wrapper.get('[data-testid="tunnel-grid"] .primary-button').trigger('click')
+      await flushPromises()
+      const savedConfigs = invoke.mock.calls
+        .filter(([command]) => command === 'save_config')
+        .map(([, args]) => args.config)
+      const addedRuleId = savedConfigs.at(-1).rules[0].id
+      expect(addedRuleId).toBe(newRuleId)
+      const runtimeListener = listen.mock.calls.at(-1)![1]
+      runtimeListener({ payload: { rules: [{ ruleId: addedRuleId, state: 'active', message: null }] } })
+      await wrapper.vm.$nextTick()
+      expect(wrapper.get('.statusbar').text()).toContain('1 运行中')
+
+      await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
+      await flushPromises()
+
+      expect(invoke).toHaveBeenCalledWith('disconnect_session', { sessionId: newSessionId })
+      expect(wrapper.get('[data-testid="empty-workspace"]')).toBeTruthy()
+      expect(wrapper.get('.statusbar').text()).toContain('0 运行中')
+    } finally {
+      randomId.mockRestore()
+    }
+  })
+
   it('keeps session deletion as a distinct confirmation and backend operation', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
@@ -268,5 +376,32 @@ describe('App', () => {
 
     expect(invoke).toHaveBeenCalledWith('delete_session', { sessionId: 'session-a' })
     expect(wrapper.get('[data-testid="empty-workspace"]')).toBeTruthy()
+  })
+
+  it('keeps a failed session deletion pending when cancel and confirm are repeated in flight', async () => {
+    const pendingDelete = deferred()
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    }, [], { delete_session: () => pendingDelete.promise })
+    const deleteSession = wrapper.findAll('button').find((button) => button.text() === '删除会话')
+    await deleteSession!.trigger('click')
+    const deletesBeforeConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_session').length
+
+    await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
+    await flushPromises()
+    const dialog = openConfirmDialog(wrapper)
+    dialog.vm.$emit('close')
+    dialog.vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+
+    expect(dialog.props('busy')).toBe(true)
+    expect(invoke.mock.calls.filter(([command]) => command === 'delete_session')).toHaveLength(deletesBeforeConfirm + 1)
+
+    pendingDelete.reject(new Error('delete failed'))
+    await flushPromises()
+    expect(wrapper.get('[role="dialog"]').text()).toContain('删除 SSH 会话')
+    expect(wrapper.get('.session-header h1').text()).toBe('会话 session-a')
   })
 })

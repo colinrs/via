@@ -21,8 +21,11 @@ const statusError = ref('')
 const exportedJson = ref('')
 const hostTrust = ref<{ host: string; port: number; algorithm: string; fingerprint: string } | null>(null)
 const deleteSessionOpen = ref(false)
+const sessionDeletionBusy = ref(false)
 const pendingRuleId = ref<string | null>(null)
+const ruleDeletionBusy = ref(false)
 const pendingGroupDeletion = ref<{ id: string; sessionIds: string[]; ruleCount: number } | null>(null)
+const groupDeletionBusy = ref(false)
 const createGroupOpen = ref(false)
 const createSessionOpen = ref(false)
 
@@ -57,13 +60,16 @@ async function toggleRule(nextRule: LocalForwardRule) { await updateRule(nextRul
 async function addRule() { if (!selectedSessionId.value) return; store.rules.push({ id: crypto.randomUUID(), sessionId: selectedSessionId.value, enabled: false, localPort: 1, targetHost: 'localhost', targetPort: 1, note: '', runtimeState: 'stopped' }); await persist() }
 async function cloneRule(id: string) { const source = store.rules.find((rule) => rule.id === id); if (source) { store.rules.push({ ...source, id: crypto.randomUUID(), localPort: 1, runtimeState: 'stopped', enabled: false }); await persist() } }
 function requestRemoveRule(id: string) { pendingRuleId.value = id }
+function closeRuleDeletion() { if (!ruleDeletionBusy.value) pendingRuleId.value = null }
 async function removeRule() {
+  if (ruleDeletionBusy.value) return
   const id = pendingRuleId.value
   if (!id) return
   const rule = store.rules.find((item) => item.id === id)
   if (!rule) { pendingRuleId.value = null; return }
-  if (rule.runtimeState !== 'stopped') await store.stopRule(id).catch(() => undefined)
+  ruleDeletionBusy.value = true
   try {
+    if (rule.runtimeState !== 'stopped') await store.stopRule(id).catch(() => undefined)
     await store.deleteRule(id)
     const index = store.rules.findIndex((item) => item.id === id)
     if (index >= 0) store.rules.splice(index, 1)
@@ -71,6 +77,8 @@ async function removeRule() {
     statusError.value = ''
   } catch {
     statusError.value = '删除规则失败，请重试。'
+  } finally {
+    ruleDeletionBusy.value = false
   }
 }
 async function startAll() { if (selectedSessionId.value) await store.startEnabledRules(selectedSessionId.value) }
@@ -98,13 +106,17 @@ function requestRemoveGroup(id: string) {
     ruleCount: store.rules.filter((rule) => affectedSessionIds.has(rule.sessionId)).length,
   }
 }
+function closeGroupDeletion() { if (!groupDeletionBusy.value) pendingGroupDeletion.value = null }
 async function removeGroup() {
+  if (groupDeletionBusy.value) return
   const pending = pendingGroupDeletion.value
   if (!pending) return
-  await Promise.all(pending.sessionIds.map((id) => store.disconnectSession(id).catch(() => undefined)))
+  groupDeletionBusy.value = true
+  const sessionIds = store.sessions.filter((session) => session.groupId === pending.id).map((session) => session.id)
+  const affectedSessionIds = new Set(sessionIds)
   try {
+    await Promise.all(sessionIds.map((id) => store.disconnectSession(id).catch(() => undefined)))
     await store.deleteGroup(pending.id)
-    const affectedSessionIds = new Set(pending.sessionIds)
     store.rules.splice(0, store.rules.length, ...store.rules.filter((rule) => !affectedSessionIds.has(rule.sessionId)))
     store.sessions.splice(0, store.sessions.length, ...store.sessions.filter((session) => session.groupId !== pending.id))
     const groupIndex = store.groups.findIndex((group) => group.id === pending.id)
@@ -114,12 +126,17 @@ async function removeGroup() {
     statusError.value = ''
   } catch {
     statusError.value = '删除分组失败，请重试。'
+  } finally {
+    groupDeletionBusy.value = false
   }
 }
 function requestRemoveSession() { if (selectedSessionId.value) deleteSessionOpen.value = true }
+function closeSessionDeletion() { if (!sessionDeletionBusy.value) deleteSessionOpen.value = false }
 async function removeSession() {
+  if (sessionDeletionBusy.value) return
   if (!selectedSessionId.value) return
   const id = selectedSessionId.value
+  sessionDeletionBusy.value = true
   // Runtime cleanup must not make an otherwise valid SQLite deletion fail.
   await store.disconnectSession(id).catch(() => undefined)
   const previousSessions = [...store.sessions]
@@ -137,6 +154,8 @@ async function removeSession() {
     store.rules.splice(0, store.rules.length, ...previousRules)
     selectedSessionId.value = id
     statusError.value = '删除会话失败，请重试。'
+  } finally {
+    sessionDeletionBusy.value = false
   }
 }
 
@@ -165,9 +184,9 @@ onMounted(async () => { try { await store.initialize(); selectedSessionId.value 
     <ImportDialog :open="importMode!==null" :mode="importMode ?? 'import'" :export-json="exportedJson" @close="importMode=null" @confirm="transfer" />
     <SecretUnlockDialog :open="unlockOpen" @close="unlockOpen=false" @unlock="unlock" />
     <HostTrustDialog :open="hostTrust!==null" :host="hostTrust?.host ?? ''" :port="hostTrust?.port ?? 22" :algorithm="hostTrust?.algorithm ?? ''" :fingerprint="hostTrust?.fingerprint ?? ''" @close="hostTrust=null" @approve="approveHostTrust" />
-    <ConfirmDialog :open="deleteSessionOpen" title="删除 SSH 会话" message="将删除此会话及其全部 Local 转发规则，此操作不可撤销。" confirm-text="删除会话" @close="deleteSessionOpen=false" @confirm="removeSession" />
-    <ConfirmDialog :open="pendingRuleId!==null" title="删除转发规则" message="将永久删除此转发规则，此操作不可撤销。" confirm-text="删除规则" @close="pendingRuleId=null" @confirm="removeRule" />
-    <ConfirmDialog :open="pendingGroupDeletion!==null" title="删除分组" :message="deleteGroupMessage" confirm-text="删除分组" @close="pendingGroupDeletion=null" @confirm="removeGroup" />
+    <ConfirmDialog :open="deleteSessionOpen" :busy="sessionDeletionBusy" title="删除 SSH 会话" message="将删除此会话及其全部 Local 转发规则，此操作不可撤销。" confirm-text="删除会话" @close="closeSessionDeletion" @confirm="removeSession" />
+    <ConfirmDialog :open="pendingRuleId!==null" :busy="ruleDeletionBusy" title="删除转发规则" message="将永久删除此转发规则，此操作不可撤销。" confirm-text="删除规则" @close="closeRuleDeletion" @confirm="removeRule" />
+    <ConfirmDialog :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" title="删除分组" :message="deleteGroupMessage" confirm-text="删除分组" @close="closeGroupDeletion" @confirm="removeGroup" />
     <CreateGroupDialog :open="createGroupOpen" @close="createGroupOpen=false" @create="createGroup" />
     <CreateSessionDialog :open="createSessionOpen" :groups="store.groups" @close="createSessionOpen=false" @create="addSession" />
   </main>

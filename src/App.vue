@@ -24,6 +24,7 @@ const unlockMode = ref<'unlock' | 'recovery'>('unlock')
 const recoveryCodes = ref<string[]>([])
 const recoveryCodesAcknowledged = ref(false)
 const secretOperationBusy = ref(false)
+const credentialOperationMayProduceCodes = ref(false)
 const statusError = ref('')
 const exportedJson = ref('')
 const hostTrust = ref<{ host: string; port: number; algorithm: string; fingerprint: string } | null>(null)
@@ -199,6 +200,7 @@ async function disconnect() { if (selectedSessionId.value) await store.disconnec
 async function initializeSecrets(password: string) {
   if (secretOperationBusy.value || !setupOpen.value || recoveryCodes.value.length > 0) return
   secretOperationBusy.value = true
+  credentialOperationMayProduceCodes.value = true
   try {
     recoveryCodes.value = await store.initializeSecrets(password)
     recoveryCodesAcknowledged.value = false
@@ -206,12 +208,14 @@ async function initializeSecrets(password: string) {
   } catch {
     statusError.value = '初始化本地凭据失败，请重试。'
   } finally {
+    credentialOperationMayProduceCodes.value = false
     secretOperationBusy.value = false
   }
 }
 async function unlock(password: string) {
   if (secretOperationBusy.value || !unlockOpen.value || unlockMode.value !== 'unlock' || recoveryCodes.value.length > 0) return
   secretOperationBusy.value = true
+  credentialOperationMayProduceCodes.value = true
   try {
     const codes = await store.unlockSecrets(password)
     unlockOpen.value = false
@@ -222,12 +226,14 @@ async function unlock(password: string) {
   } catch {
     statusError.value = '主密码不正确，无法解锁本地凭据。'
   } finally {
+    credentialOperationMayProduceCodes.value = false
     secretOperationBusy.value = false
   }
 }
 async function recover(code: string, password: string) {
   if (secretOperationBusy.value || !unlockOpen.value || unlockMode.value !== 'recovery' || recoveryCodes.value.length > 0) return
   secretOperationBusy.value = true
+  credentialOperationMayProduceCodes.value = true
   try {
     const codes = await store.recoverSecrets(code, password)
     unlockOpen.value = false
@@ -238,6 +244,7 @@ async function recover(code: string, password: string) {
   } catch {
     statusError.value = '恢复本地凭据失败，请检查恢复码后重试。'
   } finally {
+    credentialOperationMayProduceCodes.value = false
     secretOperationBusy.value = false
   }
 }
@@ -254,14 +261,14 @@ function closeUnlock() {
   unlockOpen.value = false
   unlockMode.value = 'unlock'
 }
-function acknowledgeRecoveryCodes(acknowledged: true) {
-  recoveryCodesAcknowledged.value = acknowledged
-  if (!recoveryCodesAcknowledged.value || recoveryCodes.value.length === 0) return
+function acknowledgeRecoveryCodes(acknowledged: unknown) {
+  if (acknowledged !== true || recoveryCodes.value.length === 0) return
+  recoveryCodesAcknowledged.value = true
   recoveryCodes.value = []
   recoveryCodesAcknowledged.value = false
 }
 function warnBeforeClosingWithCodes(event: BeforeUnloadEvent) {
-  if (recoveryCodes.value.length === 0) return
+  if (!credentialOperationMayProduceCodes.value && recoveryCodes.value.length === 0) return
   event.preventDefault()
   event.returnValue = ''
 }

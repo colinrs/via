@@ -136,3 +136,54 @@ config_repository 17, forwarder 2, host_trust 1, models 2, secret_store 14, tunn
 cargo check --manifest-path src-tauri/Cargo.toml
 exit 0
 ```
+
+## Review round 2/5
+
+### RED
+
+```text
+npm test -- src/App.spec.ts -t "non-boolean acknowledgement|may be generating|warns during recovery"
+Test Files  1 failed (1)
+Tests       3 failed | 56 skipped (59)
+```
+
+The failures proved that a synthetic string acknowledgement cleared pending codes, and `beforeunload` did not warn while deferred setup or recovery/unlock commands could be generating or rotating one-time codes.
+
+### GREEN
+
+```text
+npm test -- src/App.spec.ts -t "non-boolean acknowledgement|may be generating|warns during recovery"
+3 passed | 56 skipped
+
+npm test -- src/App.spec.ts
+59 passed
+
+npm run typecheck
+exit 0
+```
+
+### Review fixes and self-review
+
+- App treats the acknowledgement event as untrusted runtime input and clears pending codes only when `acknowledged === true`.
+- `credentialOperationMayProduceCodes` is set immediately before setup, unlock, and recovery commands and is cleared in `finally` only after their result or failure state is stored.
+- The unload guard warns while that flag is set or while codes remain pending. Deferred setup and recovery/legacy-unlock tests cover the race; a normal unlock returning `null` clears the warning once complete.
+- Ordinary authentication/configuration and private-key operations do not set the code-generation flag.
+
+### Final round verification
+
+```text
+npm test
+14 files passed, 101 tests passed
+
+npm run typecheck
+exit 0
+
+npm run build
+51 modules transformed; exit 0
+
+cargo test --manifest-path src-tauri/Cargo.toml
+all suites passed
+
+cargo check --manifest-path src-tauri/Cargo.toml
+exit 0
+```

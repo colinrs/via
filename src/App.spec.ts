@@ -328,6 +328,27 @@ describe('App', () => {
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
   })
 
+  it('rejects a non-boolean acknowledgement payload and clears codes only for literal true', async () => {
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: { unlock_secrets: async () => recoveryCodes('ACK') },
+    })
+    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    wrapper.getComponent(SecretUnlockDialog).vm.$emit('unlock', 'master password')
+    await flushPromises()
+    const codesDialog = wrapper.getComponent(RecoveryCodesDialog)
+
+    codesDialog.vm.$emit('acknowledge', 'yes')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('ACK-1')
+    expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+
+    codesDialog.vm.$emit('acknowledge', true)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
+  })
+
   it('accepts recovery only after the open unlock dialog enters recovery mode', async () => {
     const wrapper = await mountAppWithSecretStatus({
       configured: true,
@@ -408,6 +429,69 @@ describe('App', () => {
     expect(removeListener).toHaveBeenCalledWith('beforeunload', handler)
     addListener.mockRestore()
     removeListener.mockRestore()
+  })
+
+  it('warns before window close while setup may be generating one-time codes', async () => {
+    const pendingSetup = deferred<string[]>()
+    const addListener = vi.spyOn(window, 'addEventListener')
+    const wrapper = await mountAppWithSecretStatus({
+      configured: false,
+      commandHandlers: { initialize_secrets: () => pendingSetup.promise },
+    })
+    const handler = addListener.mock.calls.find(([type]) => type === 'beforeunload')![1] as EventListener
+
+    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'new master password')
+    await wrapper.vm.$nextTick()
+    const event = new Event('beforeunload', { cancelable: true })
+    handler(event)
+    expect(event.defaultPrevented).toBe(true)
+
+    pendingSetup.reject(new Error('setup failed before codes were generated'))
+    await flushPromises()
+    const afterFailure = new Event('beforeunload', { cancelable: true })
+    handler(afterFailure)
+    expect(afterFailure.defaultPrevented).toBe(false)
+    wrapper.unmount()
+    addListener.mockRestore()
+  })
+
+  it('warns during recovery and legacy unlock until code outcome is safely stored', async () => {
+    const pendingRecovery = deferred<string[]>()
+    const pendingUnlock = deferred<string[] | null>()
+    const addListener = vi.spyOn(window, 'addEventListener')
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: {
+        recover_secrets: () => pendingRecovery.promise,
+        unlock_secrets: () => pendingUnlock.promise,
+      },
+    })
+    const handler = addListener.mock.calls.find(([type]) => type === 'beforeunload')![1] as EventListener
+    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    const dialog = wrapper.getComponent(SecretUnlockDialog)
+    await dialog.get('[data-testid="show-recovery"]').trigger('click')
+    dialog.vm.$emit('recover', 'recovery code', 'new master password')
+    await wrapper.vm.$nextTick()
+    const duringRecovery = new Event('beforeunload', { cancelable: true })
+    handler(duringRecovery)
+    expect(duringRecovery.defaultPrevented).toBe(true)
+
+    pendingRecovery.reject(new Error('recovery failed'))
+    await flushPromises()
+    await dialog.get('[data-testid="show-unlock"]').trigger('click')
+    dialog.vm.$emit('unlock', 'master password')
+    await wrapper.vm.$nextTick()
+    const duringUnlock = new Event('beforeunload', { cancelable: true })
+    handler(duringUnlock)
+    expect(duringUnlock.defaultPrevented).toBe(true)
+
+    pendingUnlock.resolve(null)
+    await flushPromises()
+    const afterNormalUnlock = new Event('beforeunload', { cancelable: true })
+    handler(afterNormalUnlock)
+    expect(afterNormalUnlock.defaultPrevented).toBe(false)
+    wrapper.unmount()
+    addListener.mockRestore()
   })
 
   it('keeps recovery mode open and reports a recovery-specific safe error when recovery fails', async () => {

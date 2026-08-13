@@ -64,6 +64,26 @@ impl ConfigRepository {
         Ok(())
     }
 
+    pub fn delete_group(&self, group_id: Uuid) -> Result<(), ViaError> {
+        self.connection()?
+            .execute(
+                "DELETE FROM session_groups WHERE id = ?1",
+                [group_id.to_string()],
+            )
+            .map_err(database_error)?;
+        Ok(())
+    }
+
+    pub fn delete_rule(&self, rule_id: Uuid) -> Result<(), ViaError> {
+        self.connection()?
+            .execute(
+                "DELETE FROM local_forward_rules WHERE id = ?1",
+                [rule_id.to_string()],
+            )
+            .map_err(database_error)?;
+        Ok(())
+    }
+
     /// Persists a group without rewriting unrelated sessions or editor drafts.
     pub fn create_group(&self, group: &Group) -> Result<(), ViaError> {
         let name = group.name.trim();

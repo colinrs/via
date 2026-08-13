@@ -178,6 +178,164 @@ fn deleting_one_session_removes_its_rules_without_revalidating_other_drafts() {
 }
 
 #[test]
+fn deleting_one_rule_keeps_its_session_and_other_rules() {
+    let repository = ConfigRepository::new(temp_config_path());
+    let group_id = Uuid::new_v4();
+    let session_id = Uuid::new_v4();
+    let deleted_rule_id = Uuid::new_v4();
+    let retained_rule_id = Uuid::new_v4();
+    repository
+        .save(&AppConfig {
+            schema_version: 1,
+            groups: vec![Group {
+                id: group_id,
+                name: "default".into(),
+            }],
+            sessions: vec![SessionConfig::new(
+                session_id,
+                group_id,
+                "host",
+                "host.test",
+                22,
+                "user",
+                AuthConfig::Password { secret_id: None },
+            )
+            .unwrap()],
+            rules: vec![
+                LocalForwardRule::new(
+                    deleted_rule_id,
+                    session_id,
+                    true,
+                    3001,
+                    "target",
+                    443,
+                    "delete",
+                )
+                .unwrap(),
+                LocalForwardRule::new(
+                    retained_rule_id,
+                    session_id,
+                    true,
+                    3002,
+                    "target",
+                    443,
+                    "keep",
+                )
+                .unwrap(),
+            ],
+        })
+        .unwrap();
+
+    repository.delete_rule(deleted_rule_id).unwrap();
+
+    let config = repository.load().unwrap();
+    assert_eq!(
+        config
+            .sessions
+            .iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
+        vec![session_id]
+    );
+    assert_eq!(
+        config.rules.iter().map(|rule| rule.id).collect::<Vec<_>>(),
+        vec![retained_rule_id]
+    );
+}
+
+#[test]
+fn deleting_a_group_cascades_to_its_sessions_and_rules_only() {
+    let repository = ConfigRepository::new(temp_config_path());
+    let deleted_group_id = Uuid::new_v4();
+    let retained_group_id = Uuid::new_v4();
+    let deleted_session_id = Uuid::new_v4();
+    let retained_session_id = Uuid::new_v4();
+    repository
+        .save(&AppConfig {
+            schema_version: 1,
+            groups: vec![
+                Group {
+                    id: deleted_group_id,
+                    name: "delete".into(),
+                },
+                Group {
+                    id: retained_group_id,
+                    name: "keep".into(),
+                },
+            ],
+            sessions: vec![
+                SessionConfig::new(
+                    deleted_session_id,
+                    deleted_group_id,
+                    "delete",
+                    "delete.test",
+                    22,
+                    "user",
+                    AuthConfig::Password { secret_id: None },
+                )
+                .unwrap(),
+                SessionConfig::new(
+                    retained_session_id,
+                    retained_group_id,
+                    "keep",
+                    "keep.test",
+                    22,
+                    "user",
+                    AuthConfig::Password { secret_id: None },
+                )
+                .unwrap(),
+            ],
+            rules: vec![
+                LocalForwardRule::new(
+                    Uuid::new_v4(),
+                    deleted_session_id,
+                    true,
+                    3001,
+                    "target",
+                    443,
+                    "delete",
+                )
+                .unwrap(),
+                LocalForwardRule::new(
+                    Uuid::new_v4(),
+                    retained_session_id,
+                    true,
+                    3002,
+                    "target",
+                    443,
+                    "keep",
+                )
+                .unwrap(),
+            ],
+        })
+        .unwrap();
+
+    repository.delete_group(deleted_group_id).unwrap();
+
+    let config = repository.load().unwrap();
+    assert_eq!(config.groups.len(), 1);
+    assert_eq!(config.groups[0].id, retained_group_id);
+    assert!(config
+        .sessions
+        .iter()
+        .all(|session| session.group_id != deleted_group_id));
+    assert_eq!(
+        config
+            .sessions
+            .iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
+        vec![retained_session_id]
+    );
+    assert!(config.rules.iter().all(|rule| {
+        config
+            .sessions
+            .iter()
+            .any(|session| session.id == rule.session_id)
+    }));
+}
+
+#[test]
 fn creating_a_group_persists_only_the_new_group() {
     let repository = ConfigRepository::new(temp_config_path());
     let group = Group {

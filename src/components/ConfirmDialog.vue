@@ -5,12 +5,12 @@ const props = withDefaults(defineProps<{ open: boolean; title: string; message: 
   busy: false,
   generation: 0,
 })
-const emit = defineEmits<{ close: []; confirm: []; ready: [generation: number] }>()
+const emit = defineEmits<{ close: []; confirm: [generation: number]; ready: [generation: number] }>()
 
 onMounted(() => emit('ready', props.generation))
 
 function close() { if (!props.busy) emit('close') }
-function confirm() { if (!props.busy) emit('confirm') }
+function confirm() { if (!props.busy) emit('confirm', props.generation) }
 </script>
 
 <template>

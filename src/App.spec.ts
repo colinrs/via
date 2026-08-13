@@ -1313,7 +1313,7 @@ describe('App', () => {
     expect(wrapper.get('.statusbar').text()).toContain('删除分组失败，请重试。')
   })
 
-  it('requires a newly rendered confirmation after the group cascade changes', async () => {
+  it('rejects a stale dialog confirmation after the refreshed group scope is armed', async () => {
     const newSessionId = '00000000-0000-4000-8000-000000000001'
     const newRuleId = '00000000-0000-4000-8000-000000000002'
     const randomId = vi.spyOn(crypto, 'randomUUID')
@@ -1345,11 +1345,15 @@ describe('App', () => {
       const disconnectsBeforeFirstConfirm = invoke.mock.calls.filter(([command]) => command === 'disconnect_session').length
 
       const staleDialog = openConfirmDialog(wrapper)
-      staleDialog.vm.$emit('confirm')
-      staleDialog.vm.$emit('confirm')
+      const staleGeneration = staleDialog.props('generation') as number
+      const staleConfirm = staleDialog.vm.$.vnode.props?.onConfirm as (generation: unknown) => void
+      expect(staleConfirm).toBeTypeOf('function')
+      staleDialog.vm.$emit('confirm', staleGeneration)
       await flushPromises()
 
-      const refreshedDialog = wrapper.get('[role="dialog"]')
+      const refreshedDialog = openConfirmDialog(wrapper)
+      const refreshedGeneration = refreshedDialog.props('generation') as number
+      expect(refreshedGeneration).not.toBe(staleGeneration)
       expect(refreshedDialog.text()).toContain('分组内容已变化，请确认新的删除范围。')
       expect(refreshedDialog.text()).toContain('2 个会话')
       expect(refreshedDialog.text()).toContain('1 条转发规则')
@@ -1357,7 +1361,14 @@ describe('App', () => {
       expect(invoke.mock.calls.filter(([command]) => command === 'disconnect_session')).toHaveLength(disconnectsBeforeFirstConfirm)
 
       await wrapper.vm.$nextTick()
-      openConfirmDialog(wrapper).vm.$emit('confirm')
+      await flushPromises()
+      staleConfirm(staleGeneration)
+      await flushPromises()
+
+      expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeFirstConfirm)
+      expect(invoke.mock.calls.filter(([command]) => command === 'disconnect_session')).toHaveLength(disconnectsBeforeFirstConfirm)
+
+      refreshedDialog.vm.$emit('confirm', refreshedGeneration)
       await flushPromises()
 
       expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeFirstConfirm + 1)
@@ -1367,6 +1378,34 @@ describe('App', () => {
     } finally {
       randomId.mockRestore()
     }
+  })
+
+  it('rejects missing and malformed group confirmation generations', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    })
+    await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+    const dialog = openConfirmDialog(wrapper)
+    const generation = dialog.props('generation') as number
+    const deletesBeforeConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_group').length
+
+    dialog.vm.$emit('confirm')
+    dialog.vm.$emit('confirm', 'invalid-generation')
+    dialog.vm.$emit('confirm', Number.NaN)
+    await flushPromises()
+
+    expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeConfirm)
+    expect(wrapper.get('[data-testid="group-toggle-group-a"]')).toBeTruthy()
+
+    dialog.vm.$emit('confirm', generation)
+    await flushPromises()
+
+    expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeConfirm + 1)
+    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(false)
   })
 
   it('keeps session deletion as a distinct confirmation and backend operation', async () => {

@@ -32,15 +32,18 @@ const deleteSessionOpen = ref(false)
 const sessionDeletionBusy = ref(false)
 const pendingRuleId = ref<string | null>(null)
 const ruleDeletionBusy = ref(false)
-interface PendingGroupDeletion {
+interface GroupDeletionScope {
   id: string
   sessionIds: string[]
   ruleIds: string[]
   scopeChanged: boolean
 }
+interface PendingGroupDeletion extends GroupDeletionScope {
+  generation: number
+}
 const pendingGroupDeletion = ref<PendingGroupDeletion | null>(null)
 const groupDeletionBusy = ref(false)
-const groupConfirmationGeneration = ref(0)
+let groupConfirmationGeneration = 0
 const groupConfirmationArmedGeneration = ref<number | null>(null)
 const createGroupOpen = ref(false)
 const createSessionOpen = ref(false)
@@ -289,7 +292,7 @@ async function transfer(json: string, replaceAll: boolean) { try { if (importMod
 function requestCreateSession() { if (store.groups.length) createSessionOpen.value = true; else void addSession() }
 async function addSession(groupId?: string) { const group = store.groups.find((item) => item.id === groupId) ?? store.groups[0] ?? { id: crypto.randomUUID(), name: '默认分组' }; if (!store.groups.length) store.groups.push(group); const id = crypto.randomUUID(); store.sessions.push({ id, groupId: group.id, name: '未命名 SSH 会话', host: 'localhost', port: 22, user: 'root', auth: { kind: 'password', secretId: null } }); selectedSessionId.value = id; createSessionOpen.value = false; await persist() }
 async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false; statusError.value = '' } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); statusError.value = '创建分组失败，请重试。' } }
-function groupDeletionSignature(id: string): PendingGroupDeletion {
+function groupDeletionSignature(id: string): GroupDeletionScope {
   const sessionIds = store.sessions
     .filter((session) => session.groupId === id)
     .map((session) => session.id)
@@ -305,7 +308,7 @@ function groupDeletionSignature(id: string): PendingGroupDeletion {
     scopeChanged: false,
   }
 }
-function sameGroupDeletionScope(left: PendingGroupDeletion, right: PendingGroupDeletion) {
+function sameGroupDeletionScope(left: GroupDeletionScope, right: GroupDeletionScope) {
   return left.id === right.id
     && left.sessionIds.length === right.sessionIds.length
     && left.ruleIds.length === right.ruleIds.length
@@ -314,11 +317,11 @@ function sameGroupDeletionScope(left: PendingGroupDeletion, right: PendingGroupD
 }
 function requestRemoveGroup(id: string) {
   groupConfirmationArmedGeneration.value = null
-  groupConfirmationGeneration.value += 1
-  pendingGroupDeletion.value = groupDeletionSignature(id)
+  groupConfirmationGeneration += 1
+  pendingGroupDeletion.value = { ...groupDeletionSignature(id), generation: groupConfirmationGeneration }
 }
 function armGroupDeletionConfirmation(generation: number) {
-  if (pendingGroupDeletion.value && generation === groupConfirmationGeneration.value) {
+  if (generation === pendingGroupDeletion.value?.generation) {
     groupConfirmationArmedGeneration.value = generation
   }
 }
@@ -328,18 +331,17 @@ function closeGroupDeletion() {
     pendingGroupDeletion.value = null
   }
 }
-async function removeGroup() {
+async function removeGroup(generation: number) {
   if (groupDeletionBusy.value) return
   const pending = pendingGroupDeletion.value
-  if (!pending) return
+  if (!pending || generation !== pending.generation || groupConfirmationArmedGeneration.value !== generation) return
   const current = groupDeletionSignature(pending.id)
   if (!sameGroupDeletionScope(pending, current)) {
     groupConfirmationArmedGeneration.value = null
-    groupConfirmationGeneration.value += 1
-    pendingGroupDeletion.value = { ...current, scopeChanged: true }
+    groupConfirmationGeneration += 1
+    pendingGroupDeletion.value = { ...current, scopeChanged: true, generation: groupConfirmationGeneration }
     return
   }
-  if (groupConfirmationArmedGeneration.value !== groupConfirmationGeneration.value) return
   groupDeletionBusy.value = true
   const affectedSessionIds = new Set(pending.sessionIds)
   try {
@@ -446,7 +448,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeClosi
     <HostTrustDialog :open="hostTrust!==null" :host="hostTrust?.host ?? ''" :port="hostTrust?.port ?? 22" :algorithm="hostTrust?.algorithm ?? ''" :fingerprint="hostTrust?.fingerprint ?? ''" @close="hostTrust=null" @approve="approveHostTrust" />
     <ConfirmDialog :open="deleteSessionOpen" :busy="sessionDeletionBusy" title="删除 SSH 会话" message="将删除此会话及其全部 Local 转发规则，此操作不可撤销。" confirm-text="删除会话" @close="closeSessionDeletion" @confirm="removeSession" />
     <ConfirmDialog :open="pendingRuleId!==null" :busy="ruleDeletionBusy" title="删除转发规则" message="将永久删除此转发规则，此操作不可撤销。" confirm-text="删除规则" @close="closeRuleDeletion" @confirm="removeRule" />
-    <ConfirmDialog :key="groupConfirmationGeneration" :generation="groupConfirmationGeneration" :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" title="删除分组" :message="deleteGroupMessage" confirm-text="删除分组" @close="closeGroupDeletion" @confirm="removeGroup" @ready="armGroupDeletionConfirmation" />
+    <ConfirmDialog :key="pendingGroupDeletion?.generation ?? 0" :generation="pendingGroupDeletion?.generation ?? 0" :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" title="删除分组" :message="deleteGroupMessage" confirm-text="删除分组" @close="closeGroupDeletion" @confirm="removeGroup" @ready="armGroupDeletionConfirmation" />
     <CreateGroupDialog :open="createGroupOpen" @close="createGroupOpen=false" @create="createGroup" />
     <CreateSessionDialog :open="createSessionOpen" :groups="store.groups" @close="createSessionOpen=false" @create="addSession" />
     </fieldset>

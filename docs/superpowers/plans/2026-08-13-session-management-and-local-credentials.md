@@ -101,6 +101,7 @@ git commit -m "feat: add atomic group and rule deletion"
 ### Task 2: Recovery-capable secret-store format
 
 **Files:**
+- Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/src/storage/secret_store.rs`
 - Modify: `src-tauri/src/domain/errors.rs`
 - Modify: `src-tauri/src/lib.rs`
@@ -167,11 +168,13 @@ CREATE TABLE IF NOT EXISTS secret_store_metadata (
 CREATE TABLE IF NOT EXISTS recovery_codes (
   id TEXT PRIMARY KEY NOT NULL,
   salt BLOB NOT NULL,
-  hash BLOB NOT NULL
+  verifier BLOB NOT NULL,
+  wrapped_data_key_nonce BLOB NOT NULL,
+  wrapped_data_key_ciphertext BLOB NOT NULL
 );
 ```
 
-Derive a wrapping key from the master password and metadata salt; generate a random 32-byte data key, encrypt that data key with the wrapping key, and encrypt every SSH secret with the data key. Store a random salt plus Argon2 hash for each generated code. `recover` verifies one code, decrypts the stored data key with the current in-memory key, re-encrypts it with a newly derived wrapping key, replaces all recovery-code rows, and updates memory only after the transaction commits. Add a version-1 migration that, on successful legacy unlock, decrypts the legacy verifier/data with the old key, writes version-2 wrapping metadata and a newly generated code set.
+Add `subtle = "2"` for constant-time verifier comparison. Derive a wrapping key from the master password and metadata salt; generate a random 32-byte data key, encrypt that data key with the wrapping key, and encrypt every SSH secret with the data key. For each generated recovery code, use Argon2 with a unique random salt to derive 64 bytes: store the first 32 bytes as its verifier and use the other 32 bytes only as an XChaCha20-Poly1305 key that encrypts a separate copy of the data key. `recover` derives both halves from the submitted code, finds the verifier using `subtle::ConstantTimeEq`, unwraps that record's copy of the data key, re-encrypts the data key with the new master-password wrapping key, deletes all old recovery rows, inserts ten newly generated recovery records, and updates memory only after the transaction commits. This makes recovery possible while the vault is locked and the old master password is unavailable. Add a version-1 migration that, on successful legacy unlock, decrypts legacy secrets with the old key, introduces the random data key, re-encrypts the secrets, writes version-2 wrapping metadata, and returns a newly generated recovery-code set exactly once.
 
 - [ ] **Step 4: Add rejection and legacy-migration tests**
 
@@ -205,7 +208,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src-tauri/src/storage/secret_store.rs src-tauri/src/domain/errors.rs src-tauri/src/lib.rs src-tauri/tests/secret_store.rs
+git add src-tauri/Cargo.toml src-tauri/src/storage/secret_store.rs src-tauri/src/domain/errors.rs src-tauri/src/lib.rs src-tauri/tests/secret_store.rs
 git commit -m "feat: add recoverable local credential vault"
 ```
 

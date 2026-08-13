@@ -41,13 +41,13 @@ When an initialized vault is locked, the existing unlock action asks for the mas
 
 ### Recovery
 
-The unlock dialog has a recovery path. The user supplies one recovery code and a new, confirmed local-credential master password. In one database transaction, the backend verifies and consumes the matching recovery-code hash, replaces the vault verifier using the new master password, and creates ten replacement recovery codes. The response includes the replacement codes only once, for immediate display and acknowledgement. The code used for recovery and every prior code become invalid.
+The unlock dialog has a recovery path. The user supplies one recovery code and a new, confirmed local-credential master password. In one database transaction, the backend derives the recovery verifier and wrapping key from the submitted code, verifies the matching record, unwraps the data-encryption key, replaces the vault verifier and master-password wrapping using the new master password, and creates ten replacement recovery codes. The response includes the replacement codes only once, for immediate display and acknowledgement. The code used for recovery and every prior code become invalid.
 
-Recovery retains access to previously saved SSH passwords and private-key passphrases: the secret-encryption data key is rewrapped from the old master-password-derived key to the new one without decrypting values in the renderer. Recovery does not alter any SSH session configuration or remote credentials.
+Recovery retains access to previously saved SSH passwords and private-key passphrases: each recovery record contains its own encrypted wrapping of the same data-encryption key, so a valid recovery code can unwrap that key without the forgotten master password. The backend then wraps the data key with the new master-password-derived key without decrypting values in the renderer. Recovery does not alter any SSH session configuration or remote credentials.
 
 ### Storage and security constraints
 
-- Store only salted hashes of recovery codes, never the codes themselves.
+- For each recovery code, use a salted memory-hard derivation whose independent outputs provide a stored verifier and a recovery wrapping key; store the verifier and the data key encrypted by the wrapping key, never the recovery code itself.
 - Generate cryptographically random, human-enterable codes; generate ten per setup or recovery.
 - Use a separate random data-encryption key for saved SSH secrets; encrypt that data key with a key derived from the local master password.
 - Keep the data-encryption key only in process memory while unlocked and zeroize it when locking.

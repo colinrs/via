@@ -28,11 +28,18 @@ export interface ViaStore {
   rules: LocalForwardRule[]
   initialized: boolean
   initializationState: InitializationState
+  secretStoreConfigured: boolean | null
   initialize(): Promise<void>
   save(): Promise<void>
   deleteSession(sessionId: string): Promise<void>
+  deleteGroup(groupId: string): Promise<void>
+  deleteRule(ruleId: string): Promise<void>
   createGroup(group: Group): Promise<void>
-  unlockSecrets(masterPassword: string): Promise<void>
+  refreshSecretStoreStatus(): Promise<string[] | null>
+  initializeSecrets(masterPassword: string): Promise<string[]>
+  unlockSecrets(masterPassword: string): Promise<string[] | null>
+  recoverSecrets(recoveryCode: string, newMasterPassword: string): Promise<string[]>
+  saveSessionSecret(sessionId: string, secret: string): Promise<void>
   connectSession(sessionId: string): Promise<void>
   disconnectSession(sessionId: string): Promise<void>
   approveHostKey(host: string, port: number, algorithm: string, fingerprint: string): Promise<void>
@@ -60,6 +67,7 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     rules: [] as LocalForwardRule[],
     initialized: false,
     initializationState: 'idle' as InitializationState,
+    secretStoreConfigured: null as boolean | null,
   })
   let unsubscribe: (() => void) | undefined
   const reconnectAttempts = new Map<string, number>()
@@ -67,6 +75,16 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
 
   const replace = (target: unknown[], values: unknown[]) => target.splice(0, target.length, ...values)
   const snapshot = (): PersistedConfig => ({ schemaVersion: 1, groups: state.groups, sessions: state.sessions, rules: state.rules })
+  const replaceConfig = (config: PersistedConfig) => {
+    replace(state.groups, config.groups)
+    replace(state.sessions, config.sessions)
+    replace(state.rules, config.rules)
+  }
+  const refreshSecretStoreStatus = async (): Promise<string[] | null> => {
+    const status = await runtime.invoke<{ configured: boolean }>('secret_store_status')
+    state.secretStoreConfigured = status.configured
+    return null
+  }
 
   return Object.assign(state, {
     async initialize() {
@@ -84,9 +102,8 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
           }
         }
         if (!config) throw lastError
-        replace(state.groups, config.groups)
-        replace(state.sessions, config.sessions)
-        replace(state.rules, config.rules)
+        replaceConfig(config)
+        await refreshSecretStoreStatus()
         if (!unsubscribe) {
           unsubscribe = await runtime.listen<RuntimeSnapshot>('runtime-state', (runtime) => {
             for (const update of runtime.rules) {
@@ -112,11 +129,32 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     async deleteSession(sessionId: string) {
       await runtime.invoke('delete_session', { sessionId })
     },
+    async deleteGroup(groupId: string) {
+      await runtime.invoke('delete_group', { groupId })
+    },
+    async deleteRule(ruleId: string) {
+      await runtime.invoke('delete_rule', { ruleId })
+    },
     async createGroup(group: Group) {
       await runtime.invoke('create_group', { group })
     },
+    refreshSecretStoreStatus,
+    async initializeSecrets(masterPassword: string) {
+      const codes = await runtime.invoke<string[]>('initialize_secrets', { masterPassword })
+      state.secretStoreConfigured = true
+      return codes
+    },
     async unlockSecrets(masterPassword: string) {
-      await runtime.invoke('unlock_secrets', { masterPassword })
+      return runtime.invoke<string[] | null>('unlock_secrets', { masterPassword })
+    },
+    async recoverSecrets(recoveryCode: string, newMasterPassword: string) {
+      const codes = await runtime.invoke<string[]>('recover_secrets', { recoveryCode, newMasterPassword })
+      state.secretStoreConfigured = true
+      return codes
+    },
+    async saveSessionSecret(sessionId: string, secret: string) {
+      const config = await runtime.invoke<PersistedConfig>('save_session_secret', { sessionId, secret })
+      replaceConfig(config)
     },
     async connectSession(sessionId: string) {
       await runtime.invoke('connect_session', { sessionId })
@@ -144,9 +182,7 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     },
     async importConfig(json: string, replaceAll: boolean) {
       const config = await runtime.invoke<PersistedConfig>('import_config', { json, replaceAll })
-      replace(state.groups, config.groups)
-      replace(state.sessions, config.sessions)
-      replace(state.rules, config.rules)
+      replaceConfig(config)
     },
   })
 

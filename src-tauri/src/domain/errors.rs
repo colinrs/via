@@ -12,6 +12,7 @@ pub enum ViaError {
     InvalidImport(String),
     SecretStoreLocked,
     InvalidMasterPassword,
+    InvalidRecoveryCode,
     HostTrustRequired {
         host: String,
         port: u16,

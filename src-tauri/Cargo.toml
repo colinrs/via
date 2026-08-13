@@ -11,11 +11,13 @@ path = "src/lib.rs"
 argon2 = "0.5.3"
 async-trait = "0.1.92"
 chacha20poly1305 = "0.11.0"
+getrandom = "0.4"
 rand_core = "0.10.1"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 russh = "0.62.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+subtle = "2"
 tauri = { version = "2.11.3", features = [] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 tokio-util = { version = "0.7.19", features = ["rt"] }

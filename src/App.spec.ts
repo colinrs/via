@@ -1313,7 +1313,7 @@ describe('App', () => {
     expect(wrapper.get('.statusbar').text()).toContain('删除分组失败，请重试。')
   })
 
-  it('requires a second confirmation when the group cascade changes after the dialog opens', async () => {
+  it('requires a newly rendered confirmation after the group cascade changes', async () => {
     const newSessionId = '00000000-0000-4000-8000-000000000001'
     const newRuleId = '00000000-0000-4000-8000-000000000002'
     const randomId = vi.spyOn(crypto, 'randomUUID')
@@ -1344,7 +1344,9 @@ describe('App', () => {
       const deletesBeforeFirstConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_group').length
       const disconnectsBeforeFirstConfirm = invoke.mock.calls.filter(([command]) => command === 'disconnect_session').length
 
-      await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
+      const staleDialog = openConfirmDialog(wrapper)
+      staleDialog.vm.$emit('confirm')
+      staleDialog.vm.$emit('confirm')
       await flushPromises()
 
       const refreshedDialog = wrapper.get('[role="dialog"]')
@@ -1354,7 +1356,8 @@ describe('App', () => {
       expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeFirstConfirm)
       expect(invoke.mock.calls.filter(([command]) => command === 'disconnect_session')).toHaveLength(disconnectsBeforeFirstConfirm)
 
-      await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
+      await wrapper.vm.$nextTick()
+      openConfirmDialog(wrapper).vm.$emit('confirm')
       await flushPromises()
 
       expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeFirstConfirm + 1)

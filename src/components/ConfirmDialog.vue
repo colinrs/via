@@ -1,8 +1,13 @@
 <script setup lang="ts">
-const props = withDefaults(defineProps<{ open: boolean; title: string; message: string; confirmText: string; busy?: boolean }>(), {
+import { onMounted } from 'vue'
+
+const props = withDefaults(defineProps<{ open: boolean; title: string; message: string; confirmText: string; busy?: boolean; generation?: number }>(), {
   busy: false,
+  generation: 0,
 })
-const emit = defineEmits<{ close: []; confirm: [] }>()
+const emit = defineEmits<{ close: []; confirm: []; ready: [generation: number] }>()
+
+onMounted(() => emit('ready', props.generation))
 
 function close() { if (!props.busy) emit('close') }
 function confirm() { if (!props.busy) emit('confirm') }

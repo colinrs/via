@@ -40,6 +40,8 @@ interface PendingGroupDeletion {
 }
 const pendingGroupDeletion = ref<PendingGroupDeletion | null>(null)
 const groupDeletionBusy = ref(false)
+const groupConfirmationGeneration = ref(0)
+const groupConfirmationArmedGeneration = ref<number | null>(null)
 const createGroupOpen = ref(false)
 const createSessionOpen = ref(false)
 const passwordDraft = ref('')
@@ -310,17 +312,34 @@ function sameGroupDeletionScope(left: PendingGroupDeletion, right: PendingGroupD
     && left.sessionIds.every((id, index) => id === right.sessionIds[index])
     && left.ruleIds.every((id, index) => id === right.ruleIds[index])
 }
-function requestRemoveGroup(id: string) { pendingGroupDeletion.value = groupDeletionSignature(id) }
-function closeGroupDeletion() { if (!groupDeletionBusy.value) pendingGroupDeletion.value = null }
+function requestRemoveGroup(id: string) {
+  groupConfirmationArmedGeneration.value = null
+  groupConfirmationGeneration.value += 1
+  pendingGroupDeletion.value = groupDeletionSignature(id)
+}
+function armGroupDeletionConfirmation(generation: number) {
+  if (pendingGroupDeletion.value && generation === groupConfirmationGeneration.value) {
+    groupConfirmationArmedGeneration.value = generation
+  }
+}
+function closeGroupDeletion() {
+  if (!groupDeletionBusy.value) {
+    groupConfirmationArmedGeneration.value = null
+    pendingGroupDeletion.value = null
+  }
+}
 async function removeGroup() {
   if (groupDeletionBusy.value) return
   const pending = pendingGroupDeletion.value
   if (!pending) return
   const current = groupDeletionSignature(pending.id)
   if (!sameGroupDeletionScope(pending, current)) {
+    groupConfirmationArmedGeneration.value = null
+    groupConfirmationGeneration.value += 1
     pendingGroupDeletion.value = { ...current, scopeChanged: true }
     return
   }
+  if (groupConfirmationArmedGeneration.value !== groupConfirmationGeneration.value) return
   groupDeletionBusy.value = true
   const affectedSessionIds = new Set(pending.sessionIds)
   try {
@@ -427,7 +446,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeClosi
     <HostTrustDialog :open="hostTrust!==null" :host="hostTrust?.host ?? ''" :port="hostTrust?.port ?? 22" :algorithm="hostTrust?.algorithm ?? ''" :fingerprint="hostTrust?.fingerprint ?? ''" @close="hostTrust=null" @approve="approveHostTrust" />
     <ConfirmDialog :open="deleteSessionOpen" :busy="sessionDeletionBusy" title="删除 SSH 会话" message="将删除此会话及其全部 Local 转发规则，此操作不可撤销。" confirm-text="删除会话" @close="closeSessionDeletion" @confirm="removeSession" />
     <ConfirmDialog :open="pendingRuleId!==null" :busy="ruleDeletionBusy" title="删除转发规则" message="将永久删除此转发规则，此操作不可撤销。" confirm-text="删除规则" @close="closeRuleDeletion" @confirm="removeRule" />
-    <ConfirmDialog :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" title="删除分组" :message="deleteGroupMessage" confirm-text="删除分组" @close="closeGroupDeletion" @confirm="removeGroup" />
+    <ConfirmDialog :key="groupConfirmationGeneration" :generation="groupConfirmationGeneration" :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" title="删除分组" :message="deleteGroupMessage" confirm-text="删除分组" @close="closeGroupDeletion" @confirm="removeGroup" @ready="armGroupDeletionConfirmation" />
     <CreateGroupDialog :open="createGroupOpen" @close="createGroupOpen=false" @create="createGroup" />
     <CreateSessionDialog :open="createSessionOpen" :groups="store.groups" @close="createSessionOpen=false" @create="addSession" />
     </fieldset>

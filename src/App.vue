@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { open } from '@tauri-apps/plugin-dialog'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import EmptyWorkspace from './components/EmptyWorkspace.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
@@ -28,6 +29,9 @@ const pendingGroupDeletion = ref<{ id: string; sessionIds: string[]; ruleCount: 
 const groupDeletionBusy = ref(false)
 const createGroupOpen = ref(false)
 const createSessionOpen = ref(false)
+const passwordDraft = ref('')
+const passphraseDraft = ref('')
+const authenticationSaving = ref(false)
 
 const groups = computed<SessionGroup[]>(() => store.groups.map((group) => ({
   ...group,
@@ -54,7 +58,68 @@ const backendStatus = computed(() => {
   return 'Rust backend: SQLite local mode'
 })
 
-async function persist() { try { await store.save(); statusError.value = ''; return true } catch { statusError.value = '保存失败，请检查会话和规则填写是否完整。'; return false } }
+async function saveConfig() {
+  try { await store.save(); statusError.value = ''; return true } catch { statusError.value = '保存失败，请检查会话和规则填写是否完整。'; return false }
+}
+async function persist() {
+  if (authenticationSaving.value) return false
+  return saveConfig()
+}
+function clearAuthenticationDrafts() {
+  passwordDraft.value = ''
+  passphraseDraft.value = ''
+}
+async function changeAuthenticationKind(event: Event) {
+  if (authenticationSaving.value) return
+  const session = selectedSession.value
+  const kind = (event.target as HTMLSelectElement).value
+  if (!session || (kind !== 'password' && kind !== 'private_key') || kind === session.auth.kind) return
+  clearAuthenticationDrafts()
+  session.auth = kind === 'password'
+    ? { kind: 'password', secretId: null }
+    : { kind: 'private_key', path: '', passphraseSecretId: null }
+  await persist()
+}
+async function choosePrivateKey() {
+  if (authenticationSaving.value) return
+  const sessionId = selectedSessionId.value
+  if (!sessionId || selectedSession.value?.auth.kind !== 'private_key') return
+  const path = await open({ multiple: false, directory: false })
+  if (typeof path !== 'string' || selectedSessionId.value !== sessionId) return
+  const session = store.sessions.find((item) => item.id === sessionId)
+  if (session?.auth.kind !== 'private_key') return
+  session.auth.path = path
+  await persist()
+}
+async function saveAuthentication() {
+  if (authenticationSaving.value) return
+  const session = selectedSession.value
+  if (!session) return
+  const sessionId = session.id
+  const authKind = session.auth.kind
+  const draft = session.auth.kind === 'password' ? passwordDraft : passphraseDraft
+  const secret = draft.value
+  authenticationSaving.value = true
+  try {
+    if (!(await saveConfig())) {
+      statusError.value = '保存认证配置失败，请重试。'
+      return
+    }
+    const persistedSession = store.sessions.find((item) => item.id === sessionId)
+    if (persistedSession?.auth.kind !== authKind) return
+    if (!secret.trim()) {
+      if (selectedSessionId.value === sessionId && selectedSession.value?.auth.kind === authKind && draft.value === secret) draft.value = ''
+      return
+    }
+    await store.saveSessionSecret(sessionId, secret)
+    if (selectedSessionId.value === sessionId && selectedSession.value?.auth.kind === authKind && draft.value === secret) draft.value = ''
+    statusError.value = ''
+  } catch {
+    statusError.value = '保存认证凭据失败，请重试。'
+  } finally {
+    authenticationSaving.value = false
+  }
+}
 async function updateRule(nextRule: LocalForwardRule) { const index = store.rules.findIndex((rule) => rule.id === nextRule.id); if (index >= 0) store.rules.splice(index, 1, nextRule); await persist() }
 async function toggleRule(nextRule: LocalForwardRule) { await updateRule(nextRule); try { if (nextRule.enabled) await store.startRule(nextRule.id); else await store.stopRule(nextRule.id) } catch { statusError.value = '规则操作失败：请先连接 SSH 会话并检查端口。' } }
 async function addRule() { if (!selectedSessionId.value) return; store.rules.push({ id: crypto.randomUUID(), sessionId: selectedSessionId.value, enabled: false, localPort: 1, targetHost: 'localhost', targetPort: 1, note: '', runtimeState: 'stopped' }); await persist() }
@@ -159,11 +224,13 @@ async function removeSession() {
   }
 }
 
+watch(selectedSessionId, clearAuthenticationDrafts)
 onMounted(async () => { try { await store.initialize(); selectedSessionId.value = store.sessions[0]?.id ?? null } catch {} })
 </script>
 
 <template>
   <main data-testid="via-app" class="via-app">
+    <fieldset data-testid="app-interactions" class="app-interactions" :disabled="authenticationSaving">
     <header class="titlebar">
       <div class="brand"><span class="mark">V</span><span>Via</span><span class="version">V1 MVP</span></div>
       <div class="title-actions"><button type="button" @click="openTransfer('import')">⇩ 导入配置</button><button type="button" @click="openTransfer('export')">⇧ 导出配置</button><button type="button" @click="unlockOpen=true">⌁ 解锁凭据</button></div>
@@ -176,7 +243,25 @@ onMounted(async () => { try { await store.initialize(); selectedSessionId.value 
           <div class="header-actions"><button class="success-button" type="button" @click="connect">连接并启动</button><button class="danger-button" type="button" @click="disconnect">断开连接</button><button class="secondary-button" type="button" @click="startAll">↻ 重连隧道</button><button class="danger-button" type="button" @click="requestRemoveSession">删除会话</button></div>
         </header>
         <TunnelGrid :rules="currentRules" @add="addRule" @update="updateRule" @toggle="toggleRule" @remove="requestRemoveRule" @clone="cloneRule" @start-all="startAll" @stop-all="stopAll" />
-        <section class="session-editor"><div class="editor-title">▤ 当前主机会话配置</div><div class="editor-fields"><label>会话名称<input v-model="selectedSession.name" @change="persist" /></label><label>主机地址<input v-model="selectedSession.host" @change="persist" /></label><label>SSH 端口<input v-model.number="selectedSession.port" type="number" @change="persist" /></label><label>登录用户名<input v-model="selectedSession.user" @change="persist" /></label><label class="key-path">认证方式<input :value="selectedSession.auth.kind === 'private_key' ? '私钥文件（路径仅本地保存）' : '密码认证（凭据不会导出）'" readonly /></label></div></section>
+        <section class="session-editor">
+          <div class="editor-title">▤ 当前主机会话配置</div>
+          <div class="editor-fields">
+            <label>会话名称<input v-model="selectedSession.name" @change="persist" /></label>
+            <label>主机地址<input v-model="selectedSession.host" @change="persist" /></label>
+            <label>SSH 端口<input v-model.number="selectedSession.port" type="number" @change="persist" /></label>
+            <label>登录用户名<input v-model="selectedSession.user" @change="persist" /></label>
+            <label>认证方式<select :value="selectedSession.auth.kind" aria-label="认证方式" :disabled="authenticationSaving" @change="changeAuthenticationKind"><option value="password">密码</option><option value="private_key">私钥</option></select></label>
+            <template v-if="selectedSession.auth.kind === 'password'">
+              <label class="authentication-field">SSH 密码<input v-model="passwordDraft" aria-label="SSH 密码" type="password" autocomplete="new-password" /></label>
+            </template>
+            <template v-else>
+              <label class="authentication-field">私钥文件<input :value="selectedSession.auth.path" aria-label="私钥文件" readonly /></label>
+              <button data-testid="choose-private-key" class="secondary-button" type="button" :disabled="authenticationSaving" @click="choosePrivateKey">选择私钥</button>
+              <label class="authentication-field">私钥口令（可选）<input v-model="passphraseDraft" aria-label="私钥口令" type="password" autocomplete="new-password" /></label>
+            </template>
+            <button data-testid="save-authentication" class="primary-button" type="button" :disabled="authenticationSaving" @click="saveAuthentication">保存认证信息</button>
+          </div>
+        </section>
       </section>
       <EmptyWorkspace v-else @create="requestCreateSession" />
     </div>
@@ -189,9 +274,10 @@ onMounted(async () => { try { await store.initialize(); selectedSessionId.value 
     <ConfirmDialog :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" title="删除分组" :message="deleteGroupMessage" confirm-text="删除分组" @close="closeGroupDeletion" @confirm="removeGroup" />
     <CreateGroupDialog :open="createGroupOpen" @close="createGroupOpen=false" @create="createGroup" />
     <CreateSessionDialog :open="createSessionOpen" :groups="store.groups" @close="createSessionOpen=false" @create="addSession" />
+    </fieldset>
   </main>
 </template>
 
 <style>
-:root { color: #e6edf3; background: #0d1117; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --canvas: #0d1117; --surface: #161b22; --surface-raised: #21262d; --line: #30363d; --text: #e6edf3; --muted: #8b949e; --blue: #388bfd; --green: #3fb950; --red: #f85149; --yellow: #d29922; } * { box-sizing: border-box; } body { margin: 0; min-width: 980px; } button,input { font: inherit; } .via-app { display: flex; min-height: 100vh; flex-direction: column; background: var(--canvas); }.titlebar { display: flex; height: 48px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface); padding: 0 17px; }.brand,.title-actions,.header-actions { display: flex; align-items: center; gap: 10px; }.brand { font-size: 14px; font-weight: 750; }.mark { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 6px; background: var(--blue); color: white; font-size: 12px; }.version { border: 1px solid rgb(56 139 253 / 35%); border-radius: 4px; background: rgb(56 139 253 / 10%); padding: 2px 5px; color: #79c0ff; font-size: 10px; font-weight: 600; }.title-actions button,.secondary-button,.success-button,.danger-button { border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); padding: 7px 10px; color: var(--text); font-size: 12px; cursor: pointer; }.title-actions button:hover,.secondary-button:hover { border-color: var(--muted); }.primary-button { border: 1px solid #4696fa; border-radius: 6px; background: #1f6feb; padding: 7px 10px; color: white; font-size: 12px; font-weight: 650; cursor: pointer; }.primary-button:hover { background: #388bfd; }.success-button { border-color: rgb(63 185 80 / 35%); background: rgb(63 185 80 / 10%); color: #56d364; }.danger-button { border-color: rgb(248 81 73 / 35%); background: rgb(248 81 73 / 8%); color: #ff7b72; }.workspace { display: flex; min-height: 0; flex: 1; }.content { display: flex; min-width: 0; flex: 1; flex-direction: column; }.session-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface); padding: 17px 20px; }.section-label { margin: 0 0 4px; color: var(--blue); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }.session-header h1 { margin: 0; font-size: 16px; }.connection { display: flex; align-items: center; gap: 6px; margin: 5px 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 7px var(--green); }.connected { color: #56d364; font-size: 12px; }.session-editor { border-top: 1px solid var(--line); background: var(--surface); padding: 14px 20px 17px; }.editor-title { margin-bottom: 11px; color: var(--muted); font-size: 12px; font-weight: 700; }.editor-fields { display: grid; grid-template-columns: 1fr 1.3fr 90px 1fr 1.5fr; gap: 12px; }.editor-fields label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }.editor-fields input { min-width: 0; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: var(--canvas); padding: 7px 8px; color: var(--text); font-size: 12px; }.editor-fields input:focus { border-color: var(--blue); }.statusbar { display: flex; height: 26px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding: 0 17px; color: var(--muted); font-size: 11px; }.statusbar span { display: flex; align-items: center; gap: 6px; } @media (max-width: 1100px) { .editor-fields { grid-template-columns: repeat(2, 1fr); }.key-path { grid-column: span 2; } }
+:root { color: #e6edf3; background: #0d1117; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --canvas: #0d1117; --surface: #161b22; --surface-raised: #21262d; --line: #30363d; --text: #e6edf3; --muted: #8b949e; --blue: #388bfd; --green: #3fb950; --red: #f85149; --yellow: #d29922; } * { box-sizing: border-box; } body { margin: 0; min-width: 980px; } button,input,select { font: inherit; } .via-app { display: flex; min-height: 100vh; flex-direction: column; background: var(--canvas); }.app-interactions { display: flex; min-width: 0; min-height: 100vh; flex: 1; flex-direction: column; margin: 0; border: 0; padding: 0; }.titlebar { display: flex; height: 48px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface); padding: 0 17px; }.brand,.title-actions,.header-actions { display: flex; align-items: center; gap: 10px; }.brand { font-size: 14px; font-weight: 750; }.mark { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 6px; background: var(--blue); color: white; font-size: 12px; }.version { border: 1px solid rgb(56 139 253 / 35%); border-radius: 4px; background: rgb(56 139 253 / 10%); padding: 2px 5px; color: #79c0ff; font-size: 10px; font-weight: 600; }.title-actions button,.secondary-button,.success-button,.danger-button { border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); padding: 7px 10px; color: var(--text); font-size: 12px; cursor: pointer; }.title-actions button:hover,.secondary-button:hover { border-color: var(--muted); }.primary-button { border: 1px solid #4696fa; border-radius: 6px; background: #1f6feb; padding: 7px 10px; color: white; font-size: 12px; font-weight: 650; cursor: pointer; }.primary-button:hover { background: #388bfd; }.success-button { border-color: rgb(63 185 80 / 35%); background: rgb(63 185 80 / 10%); color: #56d364; }.danger-button { border-color: rgb(248 81 73 / 35%); background: rgb(248 81 73 / 8%); color: #ff7b72; }.workspace { display: flex; min-height: 0; flex: 1; }.content { display: flex; min-width: 0; flex: 1; flex-direction: column; }.session-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface); padding: 17px 20px; }.section-label { margin: 0 0 4px; color: var(--blue); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }.session-header h1 { margin: 0; font-size: 16px; }.connection { display: flex; align-items: center; gap: 6px; margin: 5px 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 7px var(--green); }.connected { color: #56d364; font-size: 12px; }.session-editor { border-top: 1px solid var(--line); background: var(--surface); padding: 14px 20px 17px; }.editor-title { margin-bottom: 11px; color: var(--muted); font-size: 12px; font-weight: 700; }.editor-fields { display: grid; grid-template-columns: 1fr 1.3fr 90px 1fr 1.5fr; gap: 12px; }.editor-fields label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }.editor-fields input,.editor-fields select { min-width: 0; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: var(--canvas); padding: 7px 8px; color: var(--text); font-size: 12px; }.editor-fields input:focus,.editor-fields select:focus { border-color: var(--blue); }.editor-fields > button { align-self: end; }.statusbar { display: flex; height: 26px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding: 0 17px; color: var(--muted); font-size: 11px; }.statusbar span { display: flex; align-items: center; gap: 6px; } @media (max-width: 1100px) { .editor-fields { grid-template-columns: repeat(2, 1fr); }.key-path { grid-column: span 2; } }
 </style>

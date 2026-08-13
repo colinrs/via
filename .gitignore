@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# uv / virtualenv
+.venv/
+
+# Node / pnpm
+node_modules/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# MkDocs build output (Task 14.4)
+site/
+
+# Env / editor / OS
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+
+# Task 14.3 eval regression baseline (operator-recorded, not source)
+packages/core/smartcs_core/eval/data/
+
+# Task 16.1 status page generated output (operator-regenerated, not source)
+deploy/statuspage/public/
+
+# Local non-Docker dev runtime artifacts (pidfiles + logs)
+.run/
+
+# Celery beat schedule (SQLite, recreated on start)
+celerybeat-schedule.db
+
+# Visual companion mockups (brainstorming)
+.superpowers/
+# Added by code-review-graph
+.code-review-graph/
+docs
+prd
+src-tauri/target
+node_modules
+.superpowers

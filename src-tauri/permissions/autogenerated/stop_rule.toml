@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stop-rule"
+description = "Enables the stop_rule command without any pre-configured scope."
+commands.allow = ["stop_rule"]
+
+[[permission]]
+identifier = "deny-stop-rule"
+description = "Denies the stop_rule command without any pre-configured scope."
+commands.deny = ["stop_rule"]

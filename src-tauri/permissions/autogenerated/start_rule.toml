@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-start-rule"
+description = "Enables the start_rule command without any pre-configured scope."
+commands.allow = ["start_rule"]
+
+[[permission]]
+identifier = "deny-start-rule"
+description = "Denies the start_rule command without any pre-configured scope."
+commands.deny = ["start_rule"]

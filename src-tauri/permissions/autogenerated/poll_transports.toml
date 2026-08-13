@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poll-transports"
+description = "Enables the poll_transports command without any pre-configured scope."
+commands.allow = ["poll_transports"]
+
+[[permission]]
+identifier = "deny-poll-transports"
+description = "Denies the poll_transports command without any pre-configured scope."
+commands.deny = ["poll_transports"]

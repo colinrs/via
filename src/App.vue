@@ -8,6 +8,8 @@ import CreateGroupDialog from './components/CreateGroupDialog.vue'
 import CreateSessionDialog from './components/CreateSessionDialog.vue'
 import HostTrustDialog from './components/HostTrustDialog.vue'
 import ImportDialog from './components/ImportDialog.vue'
+import RecoveryCodesDialog from './components/RecoveryCodesDialog.vue'
+import SecretSetupDialog from './components/SecretSetupDialog.vue'
 import SecretUnlockDialog from './components/SecretUnlockDialog.vue'
 import SessionSidebar, { type SessionGroup } from './components/SessionSidebar.vue'
 import TunnelGrid from './components/TunnelGrid.vue'
@@ -18,6 +20,8 @@ const store = createViaStore()
 const selectedSessionId = ref<string | null>(null)
 const importMode = ref<'import' | 'export' | null>(null)
 const unlockOpen = ref(false)
+const recoveryCodes = ref<string[]>([])
+const secretOperationBusy = ref(false)
 const statusError = ref('')
 const exportedJson = ref('')
 const hostTrust = ref<{ host: string; port: number; algorithm: string; fingerprint: string } | null>(null)
@@ -53,6 +57,10 @@ const activeCount = computed(() => store.rules.filter((rule) => rule.runtimeStat
 const errorCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'conflict' || rule.runtimeState === 'failed').length)
 const authenticationBusy = computed(() => authenticationSaving.value || authenticationPicking.value)
 const authenticationControlsBusy = computed(() => authenticationBusy.value || configurationSaving.value)
+const setupOpen = computed(() => store.initializationState === 'ready' && store.secretStoreConfigured === false)
+const workspaceReady = computed(() => store.initializationState === 'ready'
+  && store.secretStoreConfigured !== false
+  && recoveryCodes.value.length === 0)
 const deleteGroupMessage = computed(() => {
   const pending = pendingGroupDeletion.value
   if (!pending) return ''
@@ -186,7 +194,48 @@ function hostTrustRequest(error: unknown) {
 async function connect() { if (!selectedSessionId.value) return; try { await store.connectSession(selectedSessionId.value); await startAll() } catch (error) { hostTrust.value = hostTrustRequest(error); const value = String(error); statusError.value = hostTrust.value ? '' : value.includes('HostKeyChanged') ? '主机密钥已变化，连接已阻断。请核对旧/新 SHA-256 指纹后更新受信任主机。' : '连接失败：请解锁凭据或检查主机指纹与网络。' } }
 async function approveHostTrust() { if (!hostTrust.value) return; const request = hostTrust.value; try { await store.approveHostKey(request.host, request.port, request.algorithm, request.fingerprint); hostTrust.value = null; await connect() } catch { statusError.value = '无法保存主机信任记录。' } }
 async function disconnect() { if (selectedSessionId.value) await store.disconnectSession(selectedSessionId.value) }
-async function unlock(password: string) { try { await store.unlockSecrets(password); unlockOpen.value = false; statusError.value = '' } catch { statusError.value = '主密码不正确，无法解锁本地凭据。' } }
+async function initializeSecrets(password: string) {
+  if (secretOperationBusy.value) return
+  secretOperationBusy.value = true
+  try {
+    recoveryCodes.value = await store.initializeSecrets(password)
+    statusError.value = ''
+  } catch {
+    statusError.value = '初始化本地凭据失败，请重试。'
+  } finally {
+    secretOperationBusy.value = false
+  }
+}
+async function unlock(password: string) {
+  if (secretOperationBusy.value) return
+  secretOperationBusy.value = true
+  try {
+    const codes = await store.unlockSecrets(password)
+    unlockOpen.value = false
+    recoveryCodes.value = codes ?? []
+    statusError.value = ''
+  } catch {
+    statusError.value = '主密码不正确，无法解锁本地凭据。'
+  } finally {
+    secretOperationBusy.value = false
+  }
+}
+async function recover(code: string, password: string) {
+  if (secretOperationBusy.value) return
+  secretOperationBusy.value = true
+  try {
+    const codes = await store.recoverSecrets(code, password)
+    unlockOpen.value = false
+    recoveryCodes.value = codes
+    statusError.value = ''
+  } catch {
+    statusError.value = '恢复本地凭据失败，请检查恢复码后重试。'
+  } finally {
+    secretOperationBusy.value = false
+  }
+}
+function closeUnlock() { if (!secretOperationBusy.value) unlockOpen.value = false }
+function closeRecoveryCodes() { recoveryCodes.value = [] }
 async function openTransfer(mode: 'import' | 'export') { try { exportedJson.value = mode === 'export' ? await store.exportConfig() : ''; importMode.value = mode } catch { statusError.value = '无法读取配置。' } }
 async function transfer(json: string, replaceAll: boolean) { try { if (importMode.value === 'export') await navigator.clipboard.writeText(json); else { await store.importConfig(json, replaceAll); selectedSessionId.value = store.sessions[0]?.id ?? null }; importMode.value = null } catch { statusError.value = '配置处理失败，请确认 JSON 内容和字段。' } }
 function requestCreateSession() { if (store.groups.length) createSessionOpen.value = true; else void addSession() }
@@ -263,12 +312,12 @@ onMounted(async () => { try { await store.initialize(); selectedSessionId.value 
 
 <template>
   <main data-testid="via-app" class="via-app">
-    <fieldset data-testid="app-interactions" class="app-interactions" :disabled="authenticationBusy">
+    <fieldset data-testid="app-interactions" class="app-interactions" :disabled="authenticationBusy || secretOperationBusy">
     <header class="titlebar">
       <div class="brand"><span class="mark">V</span><span>Via</span><span class="version">V1 MVP</span></div>
-      <div class="title-actions"><button type="button" @click="openTransfer('import')">⇩ 导入配置</button><button type="button" @click="openTransfer('export')">⇧ 导出配置</button><button type="button" @click="unlockOpen=true">⌁ 解锁凭据</button></div>
+      <div v-if="workspaceReady" class="title-actions"><button type="button" @click="openTransfer('import')">⇩ 导入配置</button><button type="button" @click="openTransfer('export')">⇧ 导出配置</button><button type="button" @click="unlockOpen=true">⌁ 解锁凭据</button></div>
     </header>
-    <div class="workspace">
+    <div v-if="workspaceReady" class="workspace">
       <SessionSidebar :groups="groups" :selected-session-id="selectedSessionId ?? ''" @select="selectedSessionId = $event" @create="requestCreateSession" @create-group="createGroupOpen=true" @delete-group="requestRemoveGroup" />
       <section v-if="selectedSession" class="content">
         <header class="session-header">
@@ -300,7 +349,9 @@ onMounted(async () => { try { await store.initialize(); selectedSessionId.value 
     </div>
     <footer class="statusbar"><span><i class="live-dot" />{{ backendStatus }}</span><span>隧道：{{ activeCount }} 运行中 / {{ errorCount }} 异常</span></footer>
     <ImportDialog :open="importMode!==null" :mode="importMode ?? 'import'" :export-json="exportedJson" @close="importMode=null" @confirm="transfer" />
-    <SecretUnlockDialog :open="unlockOpen" @close="unlockOpen=false" @unlock="unlock" />
+    <SecretSetupDialog :open="setupOpen" @setup="initializeSecrets" />
+    <SecretUnlockDialog :open="unlockOpen" @close="closeUnlock" @unlock="unlock" @recover="recover" />
+    <RecoveryCodesDialog :open="recoveryCodes.length > 0" :codes="recoveryCodes" @close="closeRecoveryCodes" />
     <HostTrustDialog :open="hostTrust!==null" :host="hostTrust?.host ?? ''" :port="hostTrust?.port ?? 22" :algorithm="hostTrust?.algorithm ?? ''" :fingerprint="hostTrust?.fingerprint ?? ''" @close="hostTrust=null" @approve="approveHostTrust" />
     <ConfirmDialog :open="deleteSessionOpen" :busy="sessionDeletionBusy" title="删除 SSH 会话" message="将删除此会话及其全部 Local 转发规则，此操作不可撤销。" confirm-text="删除会话" @close="closeSessionDeletion" @confirm="removeSession" />
     <ConfirmDialog :open="pendingRuleId!==null" :busy="ruleDeletionBusy" title="删除转发规则" message="将永久删除此转发规则，此操作不可撤销。" confirm-text="删除规则" @close="closeRuleDeletion" @confirm="removeRule" />

@@ -74,6 +74,16 @@ docs/superpowers/plans/      实施计划
 - 日志不得记录密码、私钥口令或私钥内容。
 - 首次 SSH 连接将要求确认主机密钥指纹；指纹变化时应阻断连接。
 
+### 主密码与恢复码
+
+首次启动时必须设置应用主密码，Via 使用它保护保存在当前设备上的 SSH 密码和私钥口令。初始化完成后会生成 10 枚恢复码，并且只显示一次；请立即将它们保存在密码管理器等安全位置。
+
+忘记主密码时，可使用一枚未使用的恢复码设置新的主密码。恢复成功后，原恢复码全部失效，Via 会生成并仅显示一次全新的 10 枚恢复码。恢复功能只恢复对本机加密凭据副本的访问，无法找回、重置或下载远端服务器上的 SSH 凭据。
+
+### Master password and recovery codes
+
+Via requires a master password for locally encrypted credential copies. The 10 recovery codes are shown once and rotate after recovery; they restore local access only and cannot recover credentials from remote SSH servers.
+
 ## 开发验证
 
 提交前运行：

@@ -13,6 +13,8 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({ open }))
 
 import App from './App.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import SecretSetupDialog from './components/SecretSetupDialog.vue'
+import SecretUnlockDialog from './components/SecretUnlockDialog.vue'
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -31,6 +33,7 @@ function openConfirmDialog(wrapper: ReturnType<typeof mount>) {
 function mountAppWithGroups(groups: Array<{ id: string; name: string }>) {
   invoke.mockImplementation(async (command: string) => {
     if (command === 'load_config') return { schemaVersion: 1, groups, sessions: [], rules: [] }
+    if (command === 'secret_store_status') return { configured: true }
     return undefined
   })
   listen.mockResolvedValue(() => undefined)
@@ -95,6 +98,7 @@ function mountAppWithPendingConfig() {
 function mountAppWithListenerFailure() {
   invoke.mockImplementation(async (command: string) => {
     if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+    if (command === 'secret_store_status') return { configured: true }
     return undefined
   })
   listen.mockRejectedValue(new Error('listener unavailable'))
@@ -103,14 +107,164 @@ function mountAppWithListenerFailure() {
   return flushPromises().then(() => wrapper)
 }
 
+function mountAppWithSecretStatus({
+  configured,
+  commandHandlers = {},
+}: {
+  configured: boolean
+  commandHandlers?: Record<string, () => Promise<unknown>>
+}) {
+  return mountAppWithConfig({ groups: [], sessions: [], rules: [] }, [], {
+    secret_store_status: async () => ({ configured }),
+    ...commandHandlers,
+  })
+}
+
 describe('App', () => {
-  it('renders the tunnel management workspace', () => {
-    const wrapper = mount(App)
+  it('renders the tunnel management workspace after startup confirms a configured vault', async () => {
+    const wrapper = await mountAppWithSecretStatus({ configured: true })
 
     expect(wrapper.get('[data-testid="via-app"]').text()).toContain('Via')
     expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="empty-workspace"]')).toBeTruthy()
     expect(wrapper.text()).toContain('还没有 SSH 会话')
+  })
+
+  it('blocks workspace use with setup until an unconfigured vault has a master password and its codes are acknowledged', async () => {
+    const wrapper = await mountAppWithSecretStatus({
+      configured: false,
+      commandHandlers: { initialize_secrets: async () => ['A1-B2', 'C3-D4'] },
+    })
+
+    expect(wrapper.get('[aria-label="初始化本地凭据"]')).toBeTruthy()
+    expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+
+    const setup = wrapper.getComponent(SecretSetupDialog)
+    setup.vm.$emit('setup', 'new master password')
+    await flushPromises()
+
+    expect(invoke).toHaveBeenCalledWith('initialize_secrets', { masterPassword: 'new master password' })
+    expect(wrapper.find('[aria-label="初始化本地凭据"]').exists()).toBe(false)
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('A1-B2')
+    expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+
+    await wrapper.get('[aria-label="我已保存恢复码"]').setValue(true)
+    await wrapper.get('[data-testid="close-recovery-codes"]').trigger('click')
+
+    expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
+  })
+
+  it('keeps startup and backend failure from exposing a workspace that bypasses vault setup', async () => {
+    const connecting = mountAppWithPendingConfig()
+    await connecting.vm.$nextTick()
+    expect(connecting.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+    expect(connecting.findAll('button').some((button) => button.text().includes('解锁凭据'))).toBe(false)
+
+    const failed = await mountAppWithListenerFailure()
+    expect(failed.get('.statusbar').text()).toContain('无法连接本地后端')
+    expect(failed.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+  })
+
+  it('keeps setup open, reports a safe error, and invokes initialization only once while pending', async () => {
+    const pendingInitialize = deferred<string[]>()
+    const wrapper = await mountAppWithSecretStatus({
+      configured: false,
+      commandHandlers: { initialize_secrets: () => pendingInitialize.promise },
+    })
+    const setup = wrapper.getComponent(SecretSetupDialog)
+    const callsBeforeSetup = invoke.mock.calls.filter(([command]) => command === 'initialize_secrets').length
+
+    setup.vm.$emit('setup', 'never expose this password')
+    setup.vm.$emit('setup', 'never expose this password')
+    await wrapper.vm.$nextTick()
+
+    expect(invoke.mock.calls.filter(([command]) => command === 'initialize_secrets')).toHaveLength(callsBeforeSetup + 1)
+
+    pendingInitialize.reject(new Error('backend failure includes never expose this password'))
+    await flushPromises()
+    expect(wrapper.get('[aria-label="初始化本地凭据"]')).toBeTruthy()
+    expect(wrapper.get('.statusbar').text()).toContain('初始化本地凭据失败，请重试。')
+    expect(wrapper.get('.statusbar').text()).not.toContain('never expose this password')
+  })
+
+  it('shows legacy migration recovery codes after unlock and gates workspace until acknowledgement', async () => {
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: { unlock_secrets: async () => ['M1-N2'] },
+    })
+    const unlockButton = wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!
+    await unlockButton.trigger('click')
+    wrapper.getComponent(SecretUnlockDialog).vm.$emit('unlock', 'master password')
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="解锁本地凭据"]').exists()).toBe(false)
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('M1-N2')
+    expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+
+    await wrapper.get('[aria-label="我已保存恢复码"]').setValue(true)
+    await wrapper.get('[data-testid="close-recovery-codes"]').trigger('click')
+    expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
+  })
+
+  it('closes a normal unlock without showing recovery codes and prevents duplicate unlock commands', async () => {
+    const pendingUnlock = deferred<string[] | null>()
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: { unlock_secrets: () => pendingUnlock.promise },
+    })
+    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    const dialog = wrapper.getComponent(SecretUnlockDialog)
+    const callsBeforeUnlock = invoke.mock.calls.filter(([command]) => command === 'unlock_secrets').length
+
+    dialog.vm.$emit('unlock', 'master password')
+    dialog.vm.$emit('unlock', 'master password')
+    await wrapper.vm.$nextTick()
+    expect(invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')).toHaveLength(callsBeforeUnlock + 1)
+
+    pendingUnlock.resolve(null)
+    await flushPromises()
+    expect(wrapper.find('[aria-label="解锁本地凭据"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
+  })
+
+  it('shows replacement recovery codes only after successful recovery and prevents duplicate recovery commands', async () => {
+    const pendingRecovery = deferred<string[]>()
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: { recover_secrets: () => pendingRecovery.promise },
+    })
+    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    const dialog = wrapper.getComponent(SecretUnlockDialog)
+    dialog.vm.$emit('recover', 'one-time-code', 'new master password')
+    dialog.vm.$emit('recover', 'one-time-code', 'new master password')
+    await wrapper.vm.$nextTick()
+
+    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(1)
+    pendingRecovery.resolve(['R1-S2', 'T3-U4'])
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="解锁本地凭据"]').exists()).toBe(false)
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('R1-S2')
+  })
+
+  it('keeps recovery mode open and reports a recovery-specific safe error when recovery fails', async () => {
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: { recover_secrets: async () => { throw new Error('invalid code SECRET-INPUT') } },
+    })
+    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    const dialog = wrapper.getComponent(SecretUnlockDialog)
+    await dialog.get('[data-testid="show-recovery"]').trigger('click')
+    dialog.vm.$emit('recover', 'SECRET-INPUT', 'NEW-MASTER-PASSWORD')
+    await flushPromises()
+
+    expect(wrapper.get('[aria-label="解锁本地凭据"]')).toBeTruthy()
+    expect(wrapper.get('[data-testid="recover-secrets-action"]')).toBeTruthy()
+    expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
+    expect(wrapper.get('.statusbar').text()).toContain('恢复本地凭据失败，请检查恢复码后重试。')
+    expect(wrapper.get('.statusbar').text()).not.toContain('SECRET-INPUT')
+    expect(wrapper.get('.statusbar').text()).not.toContain('NEW-MASTER-PASSWORD')
   })
 
   it('creates a session in the group selected in the dialog', async () => {

@@ -114,6 +114,7 @@ impl SecretStore {
     /// It deliberately never resets an existing store, so a mistyped password
     /// cannot orphan persisted secrets.
     pub fn unlock_or_setup(&self, master_password: &str) -> Result<(), ViaError> {
+        validate_master_password(master_password)?;
         if self.is_configured()? {
             self.unlock(master_password)
         } else {

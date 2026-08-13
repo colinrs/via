@@ -49,6 +49,18 @@ fn unlock_or_setup_initializes_once_then_rejects_an_incorrect_password() {
 }
 
 #[test]
+fn blank_unlock_or_setup_does_not_create_a_vault() {
+    let path = temp_secret_path();
+    let store = SecretStore::new(path.clone());
+
+    assert_eq!(
+        store.unlock_or_setup(" \t "),
+        Err(ViaError::InvalidMasterPassword)
+    );
+    assert!(!path.exists());
+}
+
+#[test]
 fn setup_returns_ten_codes_and_each_code_is_not_stored_as_plaintext() {
     let store = SecretStore::new(temp_secret_path());
     let codes = store.initialize("master password").unwrap();

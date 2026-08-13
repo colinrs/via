@@ -1,10 +1,10 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::PathBuf, time::Duration};
 
-use rusqlite::{Connection, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{AppConfig, AuthConfig, Group, LocalForwardRule, SessionConfig, ViaError};
+use crate::{AppConfig, AuthConfig, Group, LocalForwardRule, SecretStore, SessionConfig, ViaError};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ImportMode {
@@ -49,6 +49,67 @@ impl ConfigRepository {
             .map_err(database_error)?;
         insert_config(&transaction, config)?;
         transaction.commit().map_err(database_error)
+    }
+
+    pub fn save_session_secret(
+        &self,
+        secrets: &SecretStore,
+        session_id: Uuid,
+        secret: impl Into<String>,
+    ) -> Result<(), ViaError> {
+        let prepared = secrets.prepare_encrypted(secret)?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(database_error)?;
+        let auth_json = transaction
+            .query_row(
+                "SELECT auth_json FROM ssh_sessions WHERE id = ?1",
+                [session_id.to_string()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(database_error)?
+            .ok_or(ViaError::InvalidSession {
+                field: "id",
+                reason: "not found",
+            })?;
+        let mut auth: AuthConfig = serde_json::from_str(&auth_json)
+            .map_err(|error| ViaError::Storage(error.to_string()))?;
+        set_auth_secret(&mut auth, prepared.id());
+        let next_auth_json =
+            serde_json::to_string(&auth).map_err(|error| ViaError::Storage(error.to_string()))?;
+
+        secrets.insert_prepared(&transaction, &prepared)?;
+        let updated = transaction
+            .execute(
+                "UPDATE ssh_sessions SET auth_json = ?1 WHERE id = ?2",
+                params![next_auth_json, session_id.to_string()],
+            )
+            .map_err(database_error)?;
+        if updated != 1 {
+            return Err(ViaError::Storage(
+                "session secret reference was not updated".into(),
+            ));
+        }
+        transaction.commit().map_err(database_error)
+    }
+
+    pub fn replace_auth_secret(
+        mut config: AppConfig,
+        session_id: Uuid,
+        secret_id: Uuid,
+    ) -> Result<AppConfig, ViaError> {
+        let session = config
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+            .ok_or(ViaError::InvalidSession {
+                field: "id",
+                reason: "not found",
+            })?;
+        set_auth_secret(&mut session.auth, secret_id);
+        Ok(config)
     }
 
     /// Deletes one persisted session and relies on the database foreign key to
@@ -124,6 +185,9 @@ impl ConfigRepository {
             std::fs::create_dir_all(parent).map_err(storage_error)?;
         }
         let connection = Connection::open(&self.path).map_err(database_error)?;
+        connection
+            .busy_timeout(Duration::from_secs(30))
+            .map_err(database_error)?;
         connection.execute_batch(
             "PRAGMA foreign_keys = ON;
              CREATE TABLE IF NOT EXISTS session_groups (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL);
@@ -191,6 +255,16 @@ impl ConfigRepository {
             .map_err(|error| ViaError::InvalidImport(format!("invalid rule: {error:?}")))?;
         }
         Ok(())
+    }
+}
+
+fn set_auth_secret(auth: &mut AuthConfig, secret_id: Uuid) {
+    match auth {
+        AuthConfig::Password { secret_id: current } => *current = Some(secret_id),
+        AuthConfig::PrivateKey {
+            passphrase_secret_id,
+            ..
+        } => *passphrase_secret_id = Some(secret_id),
     }
 }
 

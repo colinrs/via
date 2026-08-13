@@ -25,33 +25,6 @@ fn blank_secret_is_rejected_without_creating_a_secret_record() {
 }
 
 #[test]
-fn deleting_an_encrypted_secret_removes_its_record() {
-    let store = SecretStore::new(temp_secret_path());
-    store.initialize("master password").unwrap();
-    let secret_id = store.put("ssh password").unwrap();
-
-    store.delete(secret_id).unwrap();
-
-    let record_count: i64 = Connection::open(store.path())
-        .unwrap()
-        .query_row("SELECT COUNT(*) FROM encrypted_secrets", [], |row| {
-            row.get(0)
-        })
-        .unwrap();
-    assert_eq!(record_count, 0);
-}
-
-#[test]
-fn deleting_an_ephemeral_secret_removes_it_from_memory() {
-    let store = SecretStore::new(temp_secret_path());
-    let secret_id = store.put("ssh password").unwrap();
-
-    store.delete(secret_id).unwrap();
-
-    assert_eq!(store.get(secret_id), Err(ViaError::SecretStoreLocked));
-}
-
-#[test]
 fn encrypted_secret_requires_the_correct_master_password_after_locking() {
     let store = SecretStore::new(temp_secret_path());
     store.setup("correct horse battery staple").unwrap();

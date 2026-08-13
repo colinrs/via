@@ -1,9 +1,9 @@
 use rusqlite::Connection;
+use std::sync::{Arc, Barrier};
 use uuid::Uuid;
 use via::{
     AppConfig, AuthConfig, ConfigRepository, Group, ImportMode, LocalForwardRule, SecretStore,
-    SessionConfig,
-    commands::config::{persist_session_secret, replace_auth_secret},
+    SessionConfig, commands::config::persist_session_secret,
 };
 
 #[test]
@@ -46,7 +46,8 @@ fn setting_a_password_secret_updates_only_that_sessions_secret_id() {
         rules: vec![],
     };
 
-    let next = replace_auth_secret(config, password_session_id, secret_id).unwrap();
+    let next =
+        ConfigRepository::replace_auth_secret(config, password_session_id, secret_id).unwrap();
 
     assert_eq!(
         match &next
@@ -104,7 +105,7 @@ fn setting_a_private_key_secret_updates_its_passphrase_secret_id() {
         rules: vec![],
     };
 
-    let next = replace_auth_secret(config, session_id, secret_id).unwrap();
+    let next = ConfigRepository::replace_auth_secret(config, session_id, secret_id).unwrap();
 
     assert_eq!(
         match &next.sessions[0].auth {
@@ -162,7 +163,7 @@ fn saving_a_session_secret_persists_its_reference_and_encrypted_value() {
 }
 
 #[test]
-fn failed_config_save_rolls_back_the_new_encrypted_secret() {
+fn failed_auth_update_cannot_orphan_a_secret_even_if_secret_deletion_would_fail() {
     let path = temp_config_path();
     let repository = ConfigRepository::new(path.clone());
     let secrets = SecretStore::new(path.clone());
@@ -198,6 +199,16 @@ fn failed_config_save_rolls_back_the_new_encrypted_secret() {
              BEFORE DELETE ON ssh_sessions
              BEGIN
                SELECT RAISE(ABORT, 'save blocked');
+             END;
+             CREATE TRIGGER reject_session_update
+             BEFORE UPDATE OF auth_json ON ssh_sessions
+             BEGIN
+               SELECT RAISE(ABORT, 'save blocked');
+             END;
+             CREATE TRIGGER reject_secret_delete
+             BEFORE DELETE ON encrypted_secrets
+             BEGIN
+               SELECT RAISE(ABORT, 'cleanup blocked');
              END;",
         )
         .unwrap();
@@ -211,6 +222,219 @@ fn failed_config_save_rolls_back_the_new_encrypted_secret() {
         })
         .unwrap();
     assert_eq!(record_count, 0);
+}
+
+#[test]
+fn ignored_auth_update_rolls_back_the_inserted_secret() {
+    let path = temp_config_path();
+    let repository = ConfigRepository::new(path.clone());
+    let secrets = SecretStore::new(path.clone());
+    let session_id = Uuid::new_v4();
+    let group_id = Uuid::new_v4();
+    repository
+        .save(&AppConfig {
+            schema_version: 1,
+            groups: vec![Group {
+                id: group_id,
+                name: "Default".into(),
+            }],
+            sessions: vec![
+                SessionConfig::new(
+                    session_id,
+                    group_id,
+                    "password host",
+                    "password.test",
+                    22,
+                    "user",
+                    AuthConfig::Password { secret_id: None },
+                )
+                .unwrap(),
+            ],
+            rules: vec![],
+        })
+        .unwrap();
+    secrets.initialize("master password").unwrap();
+    Connection::open(&path)
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER ignore_session_update
+             BEFORE UPDATE OF auth_json ON ssh_sessions
+             BEGIN
+               SELECT RAISE(IGNORE);
+             END;",
+        )
+        .unwrap();
+
+    assert!(persist_session_secret(&repository, &secrets, session_id, "ssh password").is_err());
+
+    assert_eq!(encrypted_secret_count(&path), 0);
+}
+
+#[test]
+fn concurrent_secret_updates_target_distinct_sessions_without_rewriting_config() {
+    let path = temp_config_path();
+    let repository = ConfigRepository::new(path.clone());
+    let first_session_id = Uuid::new_v4();
+    let second_session_id = Uuid::new_v4();
+    let group_id = Uuid::new_v4();
+    repository
+        .save(&AppConfig {
+            schema_version: 1,
+            groups: vec![Group {
+                id: group_id,
+                name: "Default".into(),
+            }],
+            sessions: vec![
+                SessionConfig::new(
+                    first_session_id,
+                    group_id,
+                    "first host",
+                    "first.test",
+                    22,
+                    "user",
+                    AuthConfig::Password { secret_id: None },
+                )
+                .unwrap(),
+                SessionConfig::new(
+                    second_session_id,
+                    group_id,
+                    "second host",
+                    "second.test",
+                    22,
+                    "user",
+                    AuthConfig::PrivateKey {
+                        path: "/keys/id_ed25519".into(),
+                        passphrase_secret_id: None,
+                    },
+                )
+                .unwrap(),
+            ],
+            rules: vec![],
+        })
+        .unwrap();
+    let reader = SecretStore::new(path.clone());
+    reader.initialize("master password").unwrap();
+    Connection::open(&path)
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER reject_session_delete
+             BEFORE DELETE ON ssh_sessions
+             BEGIN
+               SELECT RAISE(ABORT, 'whole-config replacement forbidden');
+             END;",
+        )
+        .unwrap();
+
+    let barrier = Arc::new(Barrier::new(2));
+    let updates = [
+        (first_session_id, "first secret"),
+        (second_session_id, "second secret"),
+    ]
+    .map(|(session_id, secret)| {
+        let path = path.clone();
+        let barrier = Arc::clone(&barrier);
+        std::thread::spawn(move || {
+            let repository = ConfigRepository::new(path.clone());
+            let secrets = SecretStore::new(path);
+            secrets.unlock("master password").unwrap();
+            barrier.wait();
+            persist_session_secret(&repository, &secrets, session_id, secret)
+        })
+    });
+    for update in updates {
+        update.join().unwrap().unwrap();
+    }
+
+    let saved = repository.load().unwrap();
+    let first_secret_id = match saved
+        .sessions
+        .iter()
+        .find(|session| session.id == first_session_id)
+        .unwrap()
+        .auth
+    {
+        AuthConfig::Password {
+            secret_id: Some(secret_id),
+        } => secret_id,
+        _ => panic!("first secret reference was not saved"),
+    };
+    let second_secret_id = match saved
+        .sessions
+        .iter()
+        .find(|session| session.id == second_session_id)
+        .unwrap()
+        .auth
+    {
+        AuthConfig::PrivateKey {
+            passphrase_secret_id: Some(secret_id),
+            ..
+        } => secret_id,
+        _ => panic!("second secret reference was not saved"),
+    };
+    assert_eq!(reader.get(first_secret_id).unwrap(), "first secret");
+    assert_eq!(reader.get(second_secret_id).unwrap(), "second secret");
+    assert_eq!(encrypted_secret_count(&path), 2);
+}
+
+#[test]
+fn missing_session_does_not_create_an_encrypted_secret() {
+    let path = temp_config_path();
+    let repository = ConfigRepository::new(path.clone());
+    repository.save(&AppConfig::default()).unwrap();
+    let secrets = SecretStore::new(path.clone());
+    secrets.initialize("master password").unwrap();
+
+    assert!(persist_session_secret(&repository, &secrets, Uuid::new_v4(), "ssh password").is_err());
+
+    assert_eq!(encrypted_secret_count(&path), 0);
+}
+
+#[test]
+fn blank_session_secret_is_rejected_before_database_mutation() {
+    let path = temp_config_path();
+    let repository = ConfigRepository::new(path.clone());
+    let session_id = Uuid::new_v4();
+    let group_id = Uuid::new_v4();
+    repository
+        .save(&AppConfig {
+            schema_version: 1,
+            groups: vec![Group {
+                id: group_id,
+                name: "Default".into(),
+            }],
+            sessions: vec![
+                SessionConfig::new(
+                    session_id,
+                    group_id,
+                    "host",
+                    "host.test",
+                    22,
+                    "user",
+                    AuthConfig::Password { secret_id: None },
+                )
+                .unwrap(),
+            ],
+            rules: vec![],
+        })
+        .unwrap();
+    let secrets = SecretStore::new(path.clone());
+    secrets.initialize("master password").unwrap();
+
+    assert_eq!(
+        persist_session_secret(&repository, &secrets, session_id, " \t "),
+        Err(via::ViaError::InvalidSecret)
+    );
+
+    assert_eq!(encrypted_secret_count(&path), 0);
+}
+
+fn encrypted_secret_count(path: &std::path::Path) -> i64 {
+    Connection::open(path)
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM encrypted_secrets", [], |row| {
+            row.get(0)
+        })
+        .unwrap()
 }
 
 #[test]
@@ -401,16 +625,18 @@ fn deleting_one_rule_keeps_its_session_and_other_rules() {
                 id: group_id,
                 name: "default".into(),
             }],
-            sessions: vec![SessionConfig::new(
-                session_id,
-                group_id,
-                "host",
-                "host.test",
-                22,
-                "user",
-                AuthConfig::Password { secret_id: None },
-            )
-            .unwrap()],
+            sessions: vec![
+                SessionConfig::new(
+                    session_id,
+                    group_id,
+                    "host",
+                    "host.test",
+                    22,
+                    "user",
+                    AuthConfig::Password { secret_id: None },
+                )
+                .unwrap(),
+            ],
             rules: vec![
                 LocalForwardRule::new(
                     deleted_rule_id,
@@ -525,10 +751,12 @@ fn deleting_a_group_cascades_to_its_sessions_and_rules_only() {
     let config = repository.load().unwrap();
     assert_eq!(config.groups.len(), 1);
     assert_eq!(config.groups[0].id, retained_group_id);
-    assert!(config
-        .sessions
-        .iter()
-        .all(|session| session.group_id != deleted_group_id));
+    assert!(
+        config
+            .sessions
+            .iter()
+            .all(|session| session.group_id != deleted_group_id)
+    );
     assert_eq!(
         config
             .sessions

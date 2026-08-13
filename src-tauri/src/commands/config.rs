@@ -1,32 +1,8 @@
 use crate::{
-    AppConfig, AuthConfig, ConfigRepository, Group, ImportMode, SecretStore, ViaError,
-    app_state::AppState,
+    AppConfig, ConfigRepository, Group, ImportMode, SecretStore, ViaError, app_state::AppState,
 };
 use tauri::State;
 use uuid::Uuid;
-
-pub fn replace_auth_secret(
-    mut config: AppConfig,
-    session_id: Uuid,
-    secret_id: Uuid,
-) -> Result<AppConfig, ViaError> {
-    let session = config
-        .sessions
-        .iter_mut()
-        .find(|session| session.id == session_id)
-        .ok_or(ViaError::InvalidSession {
-            field: "id",
-            reason: "not found",
-        })?;
-    match &mut session.auth {
-        AuthConfig::Password { secret_id: current } => *current = Some(secret_id),
-        AuthConfig::PrivateKey {
-            passphrase_secret_id,
-            ..
-        } => *passphrase_secret_id = Some(secret_id),
-    }
-    Ok(config)
-}
 
 pub fn persist_session_secret(
     repository: &ConfigRepository,
@@ -34,28 +10,8 @@ pub fn persist_session_secret(
     session_id: Uuid,
     secret: impl Into<String>,
 ) -> Result<AppConfig, ViaError> {
-    let config = repository.load()?;
-    if !config
-        .sessions
-        .iter()
-        .any(|session| session.id == session_id)
-    {
-        return Err(ViaError::InvalidSession {
-            field: "id",
-            reason: "not found",
-        });
-    }
-    let secret_id = secrets.put(secret)?;
-    let next = replace_auth_secret(config, session_id, secret_id)?;
-    if let Err(save_error) = repository.save(&next) {
-        if let Err(rollback_error) = secrets.delete(secret_id) {
-            return Err(ViaError::Storage(format!(
-                "failed to save session secret: {save_error:?}; rollback failed: {rollback_error:?}"
-            )));
-        }
-        return Err(save_error);
-    }
-    Ok(next)
+    repository.save_session_secret(secrets, session_id, secret)?;
+    repository.load()
 }
 #[tauri::command]
 pub fn load_config(state: State<'_, AppState>) -> Result<AppConfig, String> {

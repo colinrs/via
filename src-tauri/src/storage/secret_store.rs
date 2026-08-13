@@ -37,6 +37,17 @@ struct EncryptedValue {
     ciphertext: Vec<u8>,
 }
 
+pub(super) struct PreparedSecret {
+    id: Uuid,
+    encrypted: EncryptedValue,
+}
+
+impl PreparedSecret {
+    pub(super) fn id(&self) -> Uuid {
+        self.id
+    }
+}
+
 struct Metadata {
     version: i64,
     salt: Vec<u8>,
@@ -225,6 +236,40 @@ impl SecretStore {
         Ok(id)
     }
 
+    pub(super) fn prepare_encrypted(
+        &self,
+        value: impl Into<String>,
+    ) -> Result<PreparedSecret, ViaError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(ViaError::InvalidSecret);
+        }
+        let state = self.state.lock().map_err(lock_error)?;
+        let key = state.key.as_ref().ok_or(ViaError::SecretStoreLocked)?;
+        Ok(PreparedSecret {
+            id: Uuid::new_v4(),
+            encrypted: encrypt(key, value.as_bytes())?,
+        })
+    }
+
+    pub(super) fn insert_prepared(
+        &self,
+        transaction: &Transaction<'_>,
+        prepared: &PreparedSecret,
+    ) -> Result<(), ViaError> {
+        transaction
+            .execute(
+                "INSERT INTO encrypted_secrets (id, nonce, ciphertext) VALUES (?1, ?2, ?3)",
+                params![
+                    prepared.id.to_string(),
+                    prepared.encrypted.nonce.as_slice(),
+                    prepared.encrypted.ciphertext
+                ],
+            )
+            .map_err(database_error)?;
+        Ok(())
+    }
+
     pub fn get(&self, id: Uuid) -> Result<String, ViaError> {
         let state = self.state.lock().map_err(lock_error)?;
         if let Some(value) = state.ephemeral.get(&id) {
@@ -250,26 +295,6 @@ impl SecretStore {
         let plaintext = decrypt(key, &encrypted)
             .map_err(|_| ViaError::Storage("encrypted secret authentication failed".into()))?;
         String::from_utf8(plaintext).map_err(|error| ViaError::Storage(error.to_string()))
-    }
-
-    pub fn delete(&self, id: Uuid) -> Result<(), ViaError> {
-        if self
-            .state
-            .lock()
-            .map_err(lock_error)?
-            .ephemeral
-            .remove(&id)
-            .is_some()
-        {
-            return Ok(());
-        }
-        self.connection()?
-            .execute(
-                "DELETE FROM encrypted_secrets WHERE id = ?1",
-                [id.to_string()],
-            )
-            .map_err(database_error)?;
-        Ok(())
     }
 
     fn unlock_and_migrate_legacy(

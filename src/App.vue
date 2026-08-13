@@ -21,6 +21,8 @@ const statusError = ref('')
 const exportedJson = ref('')
 const hostTrust = ref<{ host: string; port: number; algorithm: string; fingerprint: string } | null>(null)
 const deleteSessionOpen = ref(false)
+const pendingRuleId = ref<string | null>(null)
+const pendingGroupDeletion = ref<{ id: string; sessionIds: string[]; ruleCount: number } | null>(null)
 const createGroupOpen = ref(false)
 const createSessionOpen = ref(false)
 
@@ -37,6 +39,11 @@ const selectedSession = computed(() => store.sessions.find((session) => session.
 const currentRules = computed(() => store.rules.filter((rule) => rule.sessionId === selectedSessionId.value))
 const activeCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'active').length)
 const errorCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'conflict' || rule.runtimeState === 'failed').length)
+const deleteGroupMessage = computed(() => {
+  const pending = pendingGroupDeletion.value
+  if (!pending) return ''
+  return `将删除此分组下的 ${pending.sessionIds.length} 个会话和 ${pending.ruleCount} 条转发规则，此操作不可撤销。`
+})
 const backendStatus = computed(() => {
   if (statusError.value) return statusError.value
   if (store.initializationState === 'connecting') return '正在连接本地后端…'
@@ -49,7 +56,23 @@ async function updateRule(nextRule: LocalForwardRule) { const index = store.rule
 async function toggleRule(nextRule: LocalForwardRule) { await updateRule(nextRule); try { if (nextRule.enabled) await store.startRule(nextRule.id); else await store.stopRule(nextRule.id) } catch { statusError.value = '规则操作失败：请先连接 SSH 会话并检查端口。' } }
 async function addRule() { if (!selectedSessionId.value) return; store.rules.push({ id: crypto.randomUUID(), sessionId: selectedSessionId.value, enabled: false, localPort: 1, targetHost: 'localhost', targetPort: 1, note: '', runtimeState: 'stopped' }); await persist() }
 async function cloneRule(id: string) { const source = store.rules.find((rule) => rule.id === id); if (source) { store.rules.push({ ...source, id: crypto.randomUUID(), localPort: 1, runtimeState: 'stopped', enabled: false }); await persist() } }
-async function removeRule(id: string) { if (!window.confirm('删除此转发规则？')) return; store.rules.splice(store.rules.findIndex((rule) => rule.id === id), 1); await persist() }
+function requestRemoveRule(id: string) { pendingRuleId.value = id }
+async function removeRule() {
+  const id = pendingRuleId.value
+  if (!id) return
+  const rule = store.rules.find((item) => item.id === id)
+  if (!rule) { pendingRuleId.value = null; return }
+  if (rule.runtimeState !== 'stopped') await store.stopRule(id).catch(() => undefined)
+  try {
+    await store.deleteRule(id)
+    const index = store.rules.findIndex((item) => item.id === id)
+    if (index >= 0) store.rules.splice(index, 1)
+    pendingRuleId.value = null
+    statusError.value = ''
+  } catch {
+    statusError.value = '删除规则失败，请重试。'
+  }
+}
 async function startAll() { if (selectedSessionId.value) await store.startEnabledRules(selectedSessionId.value) }
 async function stopAll() { if (selectedSessionId.value) await store.stopSessionRules(selectedSessionId.value) }
 function hostTrustRequest(error: unknown) {
@@ -66,6 +89,33 @@ async function transfer(json: string, replaceAll: boolean) { try { if (importMod
 function requestCreateSession() { if (store.groups.length) createSessionOpen.value = true; else void addSession() }
 async function addSession(groupId?: string) { const group = store.groups.find((item) => item.id === groupId) ?? store.groups[0] ?? { id: crypto.randomUUID(), name: '默认分组' }; if (!store.groups.length) store.groups.push(group); const id = crypto.randomUUID(); store.sessions.push({ id, groupId: group.id, name: '未命名 SSH 会话', host: 'localhost', port: 22, user: 'root', auth: { kind: 'password', secretId: null } }); selectedSessionId.value = id; createSessionOpen.value = false; await persist() }
 async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false; statusError.value = '' } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); statusError.value = '创建分组失败，请重试。' } }
+function requestRemoveGroup(id: string) {
+  const sessionIds = store.sessions.filter((session) => session.groupId === id).map((session) => session.id)
+  const affectedSessionIds = new Set(sessionIds)
+  pendingGroupDeletion.value = {
+    id,
+    sessionIds,
+    ruleCount: store.rules.filter((rule) => affectedSessionIds.has(rule.sessionId)).length,
+  }
+}
+async function removeGroup() {
+  const pending = pendingGroupDeletion.value
+  if (!pending) return
+  await Promise.all(pending.sessionIds.map((id) => store.disconnectSession(id).catch(() => undefined)))
+  try {
+    await store.deleteGroup(pending.id)
+    const affectedSessionIds = new Set(pending.sessionIds)
+    store.rules.splice(0, store.rules.length, ...store.rules.filter((rule) => !affectedSessionIds.has(rule.sessionId)))
+    store.sessions.splice(0, store.sessions.length, ...store.sessions.filter((session) => session.groupId !== pending.id))
+    const groupIndex = store.groups.findIndex((group) => group.id === pending.id)
+    if (groupIndex >= 0) store.groups.splice(groupIndex, 1)
+    selectedSessionId.value = store.sessions[0]?.id ?? null
+    pendingGroupDeletion.value = null
+    statusError.value = ''
+  } catch {
+    statusError.value = '删除分组失败，请重试。'
+  }
+}
 function requestRemoveSession() { if (selectedSessionId.value) deleteSessionOpen.value = true }
 async function removeSession() {
   if (!selectedSessionId.value) return
@@ -100,13 +150,13 @@ onMounted(async () => { try { await store.initialize(); selectedSessionId.value 
       <div class="title-actions"><button type="button" @click="openTransfer('import')">⇩ 导入配置</button><button type="button" @click="openTransfer('export')">⇧ 导出配置</button><button type="button" @click="unlockOpen=true">⌁ 解锁凭据</button></div>
     </header>
     <div class="workspace">
-      <SessionSidebar :groups="groups" :selected-session-id="selectedSessionId ?? ''" @select="selectedSessionId = $event" @create="requestCreateSession" @create-group="createGroupOpen=true" />
+      <SessionSidebar :groups="groups" :selected-session-id="selectedSessionId ?? ''" @select="selectedSessionId = $event" @create="requestCreateSession" @create-group="createGroupOpen=true" @delete-group="requestRemoveGroup" />
       <section v-if="selectedSession" class="content">
         <header class="session-header">
           <div><p class="section-label">SSH 会话</p><h1>{{ selectedSession.name }}</h1><p class="connection"><span class="live-dot" />{{ selectedSession.user }}@{{ selectedSession.host || '未配置主机' }}:{{ selectedSession.port }}</p></div>
           <div class="header-actions"><button class="success-button" type="button" @click="connect">连接并启动</button><button class="danger-button" type="button" @click="disconnect">断开连接</button><button class="secondary-button" type="button" @click="startAll">↻ 重连隧道</button><button class="danger-button" type="button" @click="requestRemoveSession">删除会话</button></div>
         </header>
-        <TunnelGrid :rules="currentRules" @add="addRule" @update="updateRule" @toggle="toggleRule" @remove="removeRule" @clone="cloneRule" @start-all="startAll" @stop-all="stopAll" />
+        <TunnelGrid :rules="currentRules" @add="addRule" @update="updateRule" @toggle="toggleRule" @remove="requestRemoveRule" @clone="cloneRule" @start-all="startAll" @stop-all="stopAll" />
         <section class="session-editor"><div class="editor-title">▤ 当前主机会话配置</div><div class="editor-fields"><label>会话名称<input v-model="selectedSession.name" @change="persist" /></label><label>主机地址<input v-model="selectedSession.host" @change="persist" /></label><label>SSH 端口<input v-model.number="selectedSession.port" type="number" @change="persist" /></label><label>登录用户名<input v-model="selectedSession.user" @change="persist" /></label><label class="key-path">认证方式<input :value="selectedSession.auth.kind === 'private_key' ? '私钥文件（路径仅本地保存）' : '密码认证（凭据不会导出）'" readonly /></label></div></section>
       </section>
       <EmptyWorkspace v-else @create="requestCreateSession" />
@@ -116,6 +166,8 @@ onMounted(async () => { try { await store.initialize(); selectedSessionId.value 
     <SecretUnlockDialog :open="unlockOpen" @close="unlockOpen=false" @unlock="unlock" />
     <HostTrustDialog :open="hostTrust!==null" :host="hostTrust?.host ?? ''" :port="hostTrust?.port ?? 22" :algorithm="hostTrust?.algorithm ?? ''" :fingerprint="hostTrust?.fingerprint ?? ''" @close="hostTrust=null" @approve="approveHostTrust" />
     <ConfirmDialog :open="deleteSessionOpen" title="删除 SSH 会话" message="将删除此会话及其全部 Local 转发规则，此操作不可撤销。" confirm-text="删除会话" @close="deleteSessionOpen=false" @confirm="removeSession" />
+    <ConfirmDialog :open="pendingRuleId!==null" title="删除转发规则" message="将永久删除此转发规则，此操作不可撤销。" confirm-text="删除规则" @close="pendingRuleId=null" @confirm="removeRule" />
+    <ConfirmDialog :open="pendingGroupDeletion!==null" title="删除分组" :message="deleteGroupMessage" confirm-text="删除分组" @close="pendingGroupDeletion=null" @confirm="removeGroup" />
     <CreateGroupDialog :open="createGroupOpen" @close="createGroupOpen=false" @create="createGroup" />
     <CreateSessionDialog :open="createSessionOpen" :groups="store.groups" @close="createSessionOpen=false" @create="addSession" />
   </main>

@@ -44,6 +44,7 @@ const emit = defineEmits<{
   select: [id: string]
   create: []
   createGroup: []
+  deleteGroup: [id: string]
 }>()
 </script>
 
@@ -56,16 +57,26 @@ const emit = defineEmits<{
 
     <nav class="session-navigation" aria-label="SSH 会话">
       <section v-for="group in groups" :key="group.id" class="session-group">
-        <button
-          :data-testid="`group-toggle-${group.id}`"
-          class="group-heading"
-          type="button"
-          :aria-expanded="isExpanded(group.id)"
-          @click="toggleGroup(group.id)"
-        >
-          <span class="group-name"><span aria-hidden="true">{{ group.icon }}</span>{{ group.name }}</span>
-          <span class="count">{{ group.sessions.length }}</span>
-        </button>
+        <div class="group-heading-row">
+          <button
+            :data-testid="`group-toggle-${group.id}`"
+            class="group-heading"
+            type="button"
+            :aria-expanded="isExpanded(group.id)"
+            @click="toggleGroup(group.id)"
+          >
+            <span class="group-name"><span aria-hidden="true">{{ group.icon }}</span>{{ group.name }}</span>
+            <span class="count">{{ group.sessions.length }}</span>
+          </button>
+          <button
+            :data-testid="`delete-group-${group.id}`"
+            class="delete-group"
+            type="button"
+            :aria-label="`删除分组 ${group.name}`"
+            title="删除分组"
+            @click.stop="emit('deleteGroup', group.id)"
+          >⌫</button>
+        </div>
         <div v-if="isExpanded(group.id)" class="tree-children">
           <button
             v-for="session in group.sessions"
@@ -91,11 +102,14 @@ const emit = defineEmits<{
 .create-session { margin: 14px 14px 7px; }.create-group{margin:0 14px 7px;border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;text-align:left;cursor:pointer}.create-group:hover{color:var(--text)}
 .session-navigation { overflow: auto; padding: 4px 10px 16px; }
 .session-group { margin: 13px 0 20px; }
-.group-heading { display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; padding: 0 9px 6px; color: var(--muted); background: transparent; text-align: left; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.group-heading-row { display: flex; align-items: center; }
+.group-heading { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; border: 0; padding: 0 5px 6px 9px; color: var(--muted); background: transparent; text-align: left; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .group-heading::before { content: '›'; display: inline-block; margin-right: 6px; transition: transform 160ms ease; }
 .group-heading[aria-expanded='true']::before { transform: rotate(90deg); }
 .group-name { display: flex; gap: 6px; align-items: center; }
 .count { min-width: 18px; border-radius: 20px; background: var(--surface-raised); padding: 1px 6px; text-align: center; font-size: 10px; }
+.delete-group { border: 0; padding: 0 7px 6px 3px; color: var(--muted); background: transparent; font: inherit; font-size: 15px; cursor: pointer; }
+.delete-group:hover { color: var(--red); }
 .tree-children { position: relative; margin-left: 12px; padding-left: 10px; }
 .tree-children::before { position: absolute; top: 0; bottom: 8px; left: 0; width: 1px; background: var(--line); content: ''; }
 .session-item { display: grid; width: 100%; grid-template-columns: 16px 1fr 8px; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 7px; padding: 8px; color: var(--muted); background: transparent; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }

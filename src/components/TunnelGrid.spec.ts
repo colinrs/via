@@ -32,4 +32,12 @@ describe('TunnelGrid', () => {
     expect(wrapper.emitted('toggle')?.[0][0]).toMatchObject({ id: 'rule-0', enabled: false })
     expect(wrapper.emitted('update')).toBeUndefined()
   })
+
+  it('emits the selected rule id from its delete control', async () => {
+    const wrapper = mount(TunnelGrid, { props: { rules: [rules[0]] } })
+
+    await wrapper.get('[title="删除规则"]').trigger('click')
+
+    expect(wrapper.emitted('remove')).toEqual([['rule-0']])
+  })
 })

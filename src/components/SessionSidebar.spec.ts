@@ -32,4 +32,13 @@ describe('SessionSidebar', () => {
     expect(wrapper.get('[data-testid="group-toggle-group-a"]').attributes('aria-expanded')).toBe('true')
     expect(wrapper.get('[data-testid="session-child-session-a"]').classes()).toContain('selected')
   })
+
+  it('emits the group id from its delete control without toggling the group', async () => {
+    const wrapper = mount(SessionSidebar, { props: { groups, selectedSessionId: '' } })
+
+    await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
+
+    expect(wrapper.emitted('deleteGroup')).toEqual([['group-a']])
+    expect(wrapper.get('[data-testid="group-toggle-group-a"]').attributes('aria-expanded')).toBe('true')
+  })
 })

@@ -79,8 +79,8 @@ function mountAppWithConfig(config: {
 }, commandFailures: string | string[] = [], commandHandlers: Record<string, () => Promise<unknown>> = {}) {
   const failures = new Set(Array.isArray(commandFailures) ? commandFailures : [commandFailures])
   invoke.mockImplementation(async (command: string) => {
-    if (command === 'load_config') return { schemaVersion: 1, ...config }
     if (commandHandlers[command]) return commandHandlers[command]()
+    if (command === 'load_config') return { schemaVersion: 1, ...config }
     if (failures.has(command)) throw new Error(`${command} failed`)
     return command === 'secret_store_status' ? { configured: true } : undefined
   })
@@ -1114,6 +1114,31 @@ describe('App', () => {
     expect(wrapper.get('.statusbar').text()).toContain('删除规则失败，请重试。')
   })
 
+  it('reloads backend configuration when a missing rule rejects deletion', async () => {
+    const initialConfig = {
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [rule('rule-a', 'session-a')],
+    }
+    let loadCount = 0
+    const wrapper = await mountAppWithConfig(initialConfig, 'delete_rule', {
+      load_config: async () => {
+        loadCount += 1
+        return loadCount === 1
+          ? { schemaVersion: 1, ...initialConfig }
+          : { schemaVersion: 1, ...initialConfig, rules: [] }
+      },
+    })
+    await wrapper.get('[title="删除规则"]').trigger('click')
+
+    await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
+    await flushPromises()
+
+    expect(loadCount).toBe(2)
+    expect(wrapper.find('[title="删除规则"]').exists()).toBe(false)
+    expect(wrapper.get('.statusbar').text()).toContain('删除规则失败，请重试。')
+  })
+
   it('continues deleting a running rule when its best-effort stop fails', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
@@ -1216,6 +1241,36 @@ describe('App', () => {
     expect(wrapper.get('.statusbar').text()).toContain('删除分组失败，请重试。')
   })
 
+  it('reloads backend configuration when a missing group rejects deletion', async () => {
+    const initialConfig = {
+      groups: [{ id: 'group-a', name: '分组 A' }, { id: 'group-b', name: '分组 B' }],
+      sessions: [session('session-a', 'group-a'), session('session-b', 'group-b')],
+      rules: [rule('rule-a', 'session-a'), rule('rule-b', 'session-b')],
+    }
+    let loadCount = 0
+    const wrapper = await mountAppWithConfig(initialConfig, 'delete_group', {
+      load_config: async () => {
+        loadCount += 1
+        return loadCount === 1 ? { schemaVersion: 1, ...initialConfig } : {
+          schemaVersion: 1,
+          groups: [initialConfig.groups[1]],
+          sessions: [initialConfig.sessions[1]],
+          rules: [initialConfig.rules[1]],
+        }
+      },
+    })
+    await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
+
+    await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
+    await flushPromises()
+
+    expect(loadCount).toBe(2)
+    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="group-toggle-group-b"]')).toBeTruthy()
+    expect(wrapper.get('.session-header h1').text()).toBe('会话 session-b')
+    expect(wrapper.get('.statusbar').text()).toContain('删除分组失败，请重试。')
+  })
+
   it('continues deleting a group when best-effort session disconnects fail', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
@@ -1258,7 +1313,7 @@ describe('App', () => {
     expect(wrapper.get('.statusbar').text()).toContain('删除分组失败，请重试。')
   })
 
-  it('uses current group membership at confirmation so concurrent additions leave no orphans', async () => {
+  it('requires a second confirmation when the group cascade changes after the dialog opens', async () => {
     const newSessionId = '00000000-0000-4000-8000-000000000001'
     const newRuleId = '00000000-0000-4000-8000-000000000002'
     const randomId = vi.spyOn(crypto, 'randomUUID')
@@ -1286,9 +1341,23 @@ describe('App', () => {
       await wrapper.vm.$nextTick()
       expect(wrapper.get('.statusbar').text()).toContain('1 运行中')
 
+      const deletesBeforeFirstConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_group').length
+      const disconnectsBeforeFirstConfirm = invoke.mock.calls.filter(([command]) => command === 'disconnect_session').length
+
       await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
       await flushPromises()
 
+      const refreshedDialog = wrapper.get('[role="dialog"]')
+      expect(refreshedDialog.text()).toContain('分组内容已变化，请确认新的删除范围。')
+      expect(refreshedDialog.text()).toContain('2 个会话')
+      expect(refreshedDialog.text()).toContain('1 条转发规则')
+      expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeFirstConfirm)
+      expect(invoke.mock.calls.filter(([command]) => command === 'disconnect_session')).toHaveLength(disconnectsBeforeFirstConfirm)
+
+      await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
+      await flushPromises()
+
+      expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeFirstConfirm + 1)
       expect(invoke).toHaveBeenCalledWith('disconnect_session', { sessionId: newSessionId })
       expect(wrapper.get('[data-testid="empty-workspace"]')).toBeTruthy()
       expect(wrapper.get('.statusbar').text()).toContain('0 运行中')

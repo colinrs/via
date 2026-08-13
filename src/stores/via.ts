@@ -30,6 +30,7 @@ export interface ViaStore {
   initializationState: InitializationState
   secretStoreConfigured: boolean | null
   initialize(): Promise<void>
+  reloadConfig(): Promise<void>
   save(): Promise<void>
   deleteSession(sessionId: string): Promise<void>
   deleteGroup(groupId: string): Promise<void>
@@ -97,6 +98,9 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     state.secretStoreConfigured = (status as { configured: boolean }).configured
     return null
   }
+  const reloadConfig = async () => {
+    replaceConfig(await runtime.invoke<PersistedConfig>('load_config'))
+  }
 
   return Object.assign(state, {
     async initialize() {
@@ -138,6 +142,7 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     async save() {
       await runtime.invoke('save_config', { config: snapshot() })
     },
+    reloadConfig,
     async deleteSession(sessionId: string) {
       await runtime.invoke('delete_session', { sessionId })
     },

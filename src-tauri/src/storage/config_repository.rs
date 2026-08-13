@@ -126,23 +126,31 @@ impl ConfigRepository {
     }
 
     pub fn delete_group(&self, group_id: Uuid) -> Result<(), ViaError> {
-        self.connection()?
+        let deleted = self
+            .connection()?
             .execute(
                 "DELETE FROM session_groups WHERE id = ?1",
                 [group_id.to_string()],
             )
             .map_err(database_error)?;
-        Ok(())
+        match deleted {
+            0 => Err(ViaError::NotFound("group")),
+            _ => Ok(()),
+        }
     }
 
     pub fn delete_rule(&self, rule_id: Uuid) -> Result<(), ViaError> {
-        self.connection()?
+        let deleted = self
+            .connection()?
             .execute(
                 "DELETE FROM local_forward_rules WHERE id = ?1",
                 [rule_id.to_string()],
             )
             .map_err(database_error)?;
-        Ok(())
+        match deleted {
+            0 => Err(ViaError::NotFound("forwarding rule")),
+            _ => Ok(()),
+        }
     }
 
     /// Persists a group without rewriting unrelated sessions or editor drafts.

@@ -8,6 +8,7 @@ pub enum ViaError {
         field: &'static str,
         reason: &'static str,
     },
+    NotFound(&'static str),
     Storage(String),
     InvalidImport(String),
     SecretStoreLocked,

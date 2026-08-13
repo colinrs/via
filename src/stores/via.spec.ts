@@ -62,6 +62,26 @@ describe('ViaStore', () => {
     expect(store.initializationState).toBe('failed')
   })
 
+  it('reloads persisted configuration without registering another listener', async () => {
+    const reloadedConfig = {
+      schemaVersion: 1,
+      groups: [{ id: 'group-backend', name: 'Backend' }],
+      sessions: [],
+      rules: [],
+    }
+    const invoke = vi.fn().mockResolvedValue(reloadedConfig)
+    const listen = vi.fn().mockResolvedValue(() => {})
+    const store = createViaStore({ invoke, listen } as ViaBridge)
+    store.groups.push({ id: 'group-stale', name: 'Stale' })
+
+    await store.reloadConfig()
+
+    expect(store.groups).toEqual(reloadedConfig.groups)
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledWith('load_config')
+    expect(listen).not.toHaveBeenCalled()
+  })
+
   it('starts enabled rules through the selected session command', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined)
     const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)

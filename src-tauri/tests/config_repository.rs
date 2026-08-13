@@ -3,7 +3,7 @@ use std::sync::{Arc, Barrier};
 use uuid::Uuid;
 use via::{
     AppConfig, AuthConfig, ConfigRepository, Group, ImportMode, LocalForwardRule, SecretStore,
-    SessionConfig, commands::config::persist_session_secret,
+    SessionConfig, ViaError, commands::config::persist_session_secret,
 };
 
 #[test]
@@ -680,12 +680,24 @@ fn deleting_one_rule_keeps_its_session_and_other_rules() {
 }
 
 #[test]
+fn deleting_a_missing_rule_returns_a_clear_not_found_error() {
+    let repository = ConfigRepository::new(temp_config_path());
+
+    assert_eq!(
+        repository.delete_rule(Uuid::new_v4()),
+        Err(ViaError::NotFound("forwarding rule"))
+    );
+}
+
+#[test]
 fn deleting_a_group_cascades_to_its_sessions_and_rules_only() {
     let repository = ConfigRepository::new(temp_config_path());
     let deleted_group_id = Uuid::new_v4();
     let retained_group_id = Uuid::new_v4();
     let deleted_session_id = Uuid::new_v4();
     let retained_session_id = Uuid::new_v4();
+    let deleted_rule_id = Uuid::new_v4();
+    let retained_rule_id = Uuid::new_v4();
     repository
         .save(&AppConfig {
             schema_version: 1,
@@ -723,7 +735,7 @@ fn deleting_a_group_cascades_to_its_sessions_and_rules_only() {
             ],
             rules: vec![
                 LocalForwardRule::new(
-                    Uuid::new_v4(),
+                    deleted_rule_id,
                     deleted_session_id,
                     true,
                     3001,
@@ -733,7 +745,7 @@ fn deleting_a_group_cascades_to_its_sessions_and_rules_only() {
                 )
                 .unwrap(),
                 LocalForwardRule::new(
-                    Uuid::new_v4(),
+                    retained_rule_id,
                     retained_session_id,
                     true,
                     3002,
@@ -765,12 +777,20 @@ fn deleting_a_group_cascades_to_its_sessions_and_rules_only() {
             .collect::<Vec<_>>(),
         vec![retained_session_id]
     );
-    assert!(config.rules.iter().all(|rule| {
-        config
-            .sessions
-            .iter()
-            .any(|session| session.id == rule.session_id)
-    }));
+    assert_eq!(
+        config.rules.iter().map(|rule| rule.id).collect::<Vec<_>>(),
+        vec![retained_rule_id]
+    );
+}
+
+#[test]
+fn deleting_a_missing_group_returns_a_clear_not_found_error() {
+    let repository = ConfigRepository::new(temp_config_path());
+
+    assert_eq!(
+        repository.delete_group(Uuid::new_v4()),
+        Err(ViaError::NotFound("group"))
+    );
 }
 
 #[test]

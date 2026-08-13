@@ -32,7 +32,13 @@ const deleteSessionOpen = ref(false)
 const sessionDeletionBusy = ref(false)
 const pendingRuleId = ref<string | null>(null)
 const ruleDeletionBusy = ref(false)
-const pendingGroupDeletion = ref<{ id: string; sessionIds: string[]; ruleCount: number } | null>(null)
+interface PendingGroupDeletion {
+  id: string
+  sessionIds: string[]
+  ruleIds: string[]
+  scopeChanged: boolean
+}
+const pendingGroupDeletion = ref<PendingGroupDeletion | null>(null)
 const groupDeletionBusy = ref(false)
 const createGroupOpen = ref(false)
 const createSessionOpen = ref(false)
@@ -67,7 +73,8 @@ const workspaceReady = computed(() => store.initializationState === 'ready'
 const deleteGroupMessage = computed(() => {
   const pending = pendingGroupDeletion.value
   if (!pending) return ''
-  return `将删除此分组下的 ${pending.sessionIds.length} 个会话和 ${pending.ruleCount} 条转发规则，此操作不可撤销。`
+  const warning = pending.scopeChanged ? '分组内容已变化，请确认新的删除范围。' : ''
+  return `${warning}将删除此分组下的 ${pending.sessionIds.length} 个会话和 ${pending.ruleIds.length} 条转发规则，此操作不可撤销。`
 })
 const backendStatus = computed(() => {
   if (statusError.value) return statusError.value
@@ -182,6 +189,9 @@ async function removeRule() {
     pendingRuleId.value = null
     statusError.value = ''
   } catch {
+    await store.reloadConfig().catch(() => undefined)
+    if (!store.rules.some((item) => item.id === id)) pendingRuleId.value = null
+    if (!store.sessions.some((session) => session.id === selectedSessionId.value)) selectedSessionId.value = store.sessions[0]?.id ?? null
     statusError.value = '删除规则失败，请重试。'
   } finally {
     ruleDeletionBusy.value = false
@@ -277,25 +287,44 @@ async function transfer(json: string, replaceAll: boolean) { try { if (importMod
 function requestCreateSession() { if (store.groups.length) createSessionOpen.value = true; else void addSession() }
 async function addSession(groupId?: string) { const group = store.groups.find((item) => item.id === groupId) ?? store.groups[0] ?? { id: crypto.randomUUID(), name: '默认分组' }; if (!store.groups.length) store.groups.push(group); const id = crypto.randomUUID(); store.sessions.push({ id, groupId: group.id, name: '未命名 SSH 会话', host: 'localhost', port: 22, user: 'root', auth: { kind: 'password', secretId: null } }); selectedSessionId.value = id; createSessionOpen.value = false; await persist() }
 async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false; statusError.value = '' } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); statusError.value = '创建分组失败，请重试。' } }
-function requestRemoveGroup(id: string) {
-  const sessionIds = store.sessions.filter((session) => session.groupId === id).map((session) => session.id)
+function groupDeletionSignature(id: string): PendingGroupDeletion {
+  const sessionIds = store.sessions
+    .filter((session) => session.groupId === id)
+    .map((session) => session.id)
+    .sort()
   const affectedSessionIds = new Set(sessionIds)
-  pendingGroupDeletion.value = {
+  return {
     id,
     sessionIds,
-    ruleCount: store.rules.filter((rule) => affectedSessionIds.has(rule.sessionId)).length,
+    ruleIds: store.rules
+      .filter((rule) => affectedSessionIds.has(rule.sessionId))
+      .map((rule) => rule.id)
+      .sort(),
+    scopeChanged: false,
   }
 }
+function sameGroupDeletionScope(left: PendingGroupDeletion, right: PendingGroupDeletion) {
+  return left.id === right.id
+    && left.sessionIds.length === right.sessionIds.length
+    && left.ruleIds.length === right.ruleIds.length
+    && left.sessionIds.every((id, index) => id === right.sessionIds[index])
+    && left.ruleIds.every((id, index) => id === right.ruleIds[index])
+}
+function requestRemoveGroup(id: string) { pendingGroupDeletion.value = groupDeletionSignature(id) }
 function closeGroupDeletion() { if (!groupDeletionBusy.value) pendingGroupDeletion.value = null }
 async function removeGroup() {
   if (groupDeletionBusy.value) return
   const pending = pendingGroupDeletion.value
   if (!pending) return
+  const current = groupDeletionSignature(pending.id)
+  if (!sameGroupDeletionScope(pending, current)) {
+    pendingGroupDeletion.value = { ...current, scopeChanged: true }
+    return
+  }
   groupDeletionBusy.value = true
-  const sessionIds = store.sessions.filter((session) => session.groupId === pending.id).map((session) => session.id)
-  const affectedSessionIds = new Set(sessionIds)
+  const affectedSessionIds = new Set(pending.sessionIds)
   try {
-    await Promise.all(sessionIds.map((id) => store.disconnectSession(id).catch(() => undefined)))
+    await Promise.all(pending.sessionIds.map((id) => store.disconnectSession(id).catch(() => undefined)))
     await store.deleteGroup(pending.id)
     store.rules.splice(0, store.rules.length, ...store.rules.filter((rule) => !affectedSessionIds.has(rule.sessionId)))
     store.sessions.splice(0, store.sessions.length, ...store.sessions.filter((session) => session.groupId !== pending.id))
@@ -305,6 +334,9 @@ async function removeGroup() {
     pendingGroupDeletion.value = null
     statusError.value = ''
   } catch {
+    await store.reloadConfig().catch(() => undefined)
+    if (!store.groups.some((group) => group.id === pending.id)) pendingGroupDeletion.value = null
+    if (!store.sessions.some((session) => session.id === selectedSessionId.value)) selectedSessionId.value = store.sessions[0]?.id ?? null
     statusError.value = '删除分组失败，请重试。'
   } finally {
     groupDeletionBusy.value = false

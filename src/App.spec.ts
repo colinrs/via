@@ -160,6 +160,7 @@ describe('App', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
+    await flushPromises()
     await wrapper.get('[aria-label="私钥口令"]').setValue('key passphrase')
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
@@ -224,6 +225,169 @@ describe('App', () => {
     expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(savesBeforePick)
   })
 
+  it('blocks authentication saving until a pending private-key selection is persisted', async () => {
+    const pendingOpen = deferred<string | null>()
+    open.mockReturnValue(pendingOpen.promise)
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      rules: [],
+    })
+    await wrapper.get('[aria-label="私钥口令"]').setValue('key passphrase')
+    const configSavesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+    const secretSavesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_session_secret').length
+
+    await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    const saveButton = wrapper.get('[data-testid="save-authentication"]')
+    expect(saveButton.attributes('disabled')).toBeDefined()
+    await saveButton.trigger('click')
+    await flushPromises()
+
+    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(configSavesBeforePick)
+    expect(invoke.mock.calls.filter(([command]) => command === 'save_session_secret')).toHaveLength(secretSavesBeforePick)
+
+    pendingOpen.resolve('/new/key')
+    await flushPromises()
+
+    const pickerSaves = invoke.mock.calls.filter(([command]) => command === 'save_config').slice(configSavesBeforePick)
+    expect(pickerSaves).toHaveLength(1)
+    expect(pickerSaves[0][1].config.sessions[0].auth.path).toBe('/new/key')
+    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/new/key')
+  })
+
+  it('blocks generic config writes while a private-key picker operation is pending', async () => {
+    const pendingOpen = deferred<string | null>()
+    open.mockReturnValue(pendingOpen.promise)
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      rules: [],
+    })
+    const configSavesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+
+    await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
+    const hostInput = wrapper.findAll('.editor-fields > label').find((label) => label.text().includes('主机地址'))!.get('input')
+    expect(wrapper.get('[data-testid="app-interactions"]').attributes('disabled')).toBeDefined()
+    await hostInput.setValue('racing.example.com')
+    await hostInput.trigger('change')
+    await flushPromises()
+
+    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(configSavesBeforePick)
+
+    pendingOpen.resolve('/new/key')
+    await flushPromises()
+    const pickerSaves = invoke.mock.calls.filter(([command]) => command === 'save_config').slice(configSavesBeforePick)
+    expect(pickerSaves).toHaveLength(1)
+    expect(pickerSaves[0][1].config.sessions[0].auth.path).toBe('/new/key')
+  })
+
+  it('does not start a private-key picker while another config write is pending', async () => {
+    const pendingSave = deferred()
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      rules: [],
+    }, [], { save_config: () => pendingSave.promise })
+    const opensBeforeEdit = open.mock.calls.length
+    const hostInput = wrapper.findAll('.editor-fields > label').find((label) => label.text().includes('主机地址'))!.get('input')
+
+    await hostInput.setValue('saved-first.example.com')
+    await hostInput.trigger('change')
+    await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
+
+    expect(open).toHaveBeenCalledTimes(opensBeforeEdit)
+    expect(wrapper.get('[data-testid="choose-private-key"]').attributes('disabled')).toBeDefined()
+
+    pendingSave.resolve()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="choose-private-key"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('queues ordinary config edits made while an earlier config write is pending', async () => {
+    const firstSave = deferred()
+    let saveCount = 0
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      rules: [],
+    }, [], {
+      save_config: () => {
+        saveCount += 1
+        return saveCount === 1 ? firstSave.promise : Promise.resolve()
+      },
+    })
+    const savesBeforeEdit = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+    const editorLabels = wrapper.findAll('.editor-fields > label')
+    const hostInput = editorLabels.find((label) => label.text().includes('主机地址'))!.get('input')
+    const nameInput = editorLabels.find((label) => label.text().includes('会话名称'))!.get('input')
+
+    await hostInput.setValue('queued.example.com')
+    await nameInput.setValue('排队保存')
+    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(savesBeforeEdit + 1)
+
+    firstSave.resolve()
+    await flushPromises()
+
+    const configSaves = invoke.mock.calls.filter(([command]) => command === 'save_config').slice(savesBeforeEdit)
+    expect(configSaves).toHaveLength(2)
+    expect(configSaves[1][1].config.sessions[0]).toMatchObject({ host: 'queued.example.com', name: '排队保存' })
+  })
+
+  it('allows only one private-key picker operation at a time', async () => {
+    const pendingOpen = deferred<string | null>()
+    open.mockReturnValue(pendingOpen.promise)
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      rules: [],
+    })
+    const opensBeforePick = open.mock.calls.length
+
+    const chooseButton = wrapper.get('[data-testid="choose-private-key"]')
+    await chooseButton.trigger('click')
+    await chooseButton.trigger('click')
+
+    expect(open).toHaveBeenCalledTimes(opensBeforePick + 1)
+    expect(chooseButton.attributes('disabled')).toBeDefined()
+
+    pendingOpen.resolve('/new/key')
+    await flushPromises()
+    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/new/key')
+  })
+
+  it('preserves the private-key path and reports a specific error when the picker fails', async () => {
+    open.mockRejectedValue(new Error('dialog unavailable'))
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      rules: [],
+    })
+    const savesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+
+    await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
+    await flushPromises()
+
+    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/old/key')
+    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(savesBeforePick)
+    expect(wrapper.get('.statusbar').text()).toContain('选择私钥文件失败，请重试。')
+  })
+
+  it('restores the previous private-key path when picker persistence fails', async () => {
+    open.mockResolvedValue('/new/key')
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      rules: [],
+    }, 'save_config')
+
+    await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
+    await flushPromises()
+
+    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/old/key')
+    expect(wrapper.get('.statusbar').text()).toContain('保存失败，请检查会话和规则填写是否完整。')
+  })
+
   it('persists a selected private-key path before submitting its passphrase', async () => {
     open.mockResolvedValue('/Users/me/.ssh/id_rsa')
     const config = {
@@ -243,6 +407,7 @@ describe('App', () => {
     const callsBeforePick = invoke.mock.calls.length
 
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
+    await flushPromises()
     await wrapper.get('[aria-label="私钥口令"]').setValue('passphrase')
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()

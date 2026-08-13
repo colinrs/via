@@ -32,6 +32,11 @@ const createSessionOpen = ref(false)
 const passwordDraft = ref('')
 const passphraseDraft = ref('')
 const authenticationSaving = ref(false)
+const authenticationPicking = ref(false)
+const configurationSaving = ref(false)
+let privateKeyPickerGeneration = 0
+let queuedConfigurationSaves = 0
+let configurationSaveTail: Promise<void> = Promise.resolve()
 
 const groups = computed<SessionGroup[]>(() => store.groups.map((group) => ({
   ...group,
@@ -46,6 +51,8 @@ const selectedSession = computed(() => store.sessions.find((session) => session.
 const currentRules = computed(() => store.rules.filter((rule) => rule.sessionId === selectedSessionId.value))
 const activeCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'active').length)
 const errorCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'conflict' || rule.runtimeState === 'failed').length)
+const authenticationBusy = computed(() => authenticationSaving.value || authenticationPicking.value)
+const authenticationControlsBusy = computed(() => authenticationBusy.value || configurationSaving.value)
 const deleteGroupMessage = computed(() => {
   const pending = pendingGroupDeletion.value
   if (!pending) return ''
@@ -59,10 +66,20 @@ const backendStatus = computed(() => {
 })
 
 async function saveConfig() {
-  try { await store.save(); statusError.value = ''; return true } catch { statusError.value = '保存失败，请检查会话和规则填写是否完整。'; return false }
+  queuedConfigurationSaves += 1
+  configurationSaving.value = true
+  let succeeded = false
+  const operation = configurationSaveTail.then(async () => {
+    try { await store.save(); statusError.value = ''; succeeded = true } catch { statusError.value = '保存失败，请检查会话和规则填写是否完整。' }
+  })
+  configurationSaveTail = operation
+  await operation
+  queuedConfigurationSaves -= 1
+  if (queuedConfigurationSaves === 0) configurationSaving.value = false
+  return succeeded
 }
 async function persist() {
-  if (authenticationSaving.value) return false
+  if (authenticationBusy.value) return false
   return saveConfig()
 }
 function clearAuthenticationDrafts() {
@@ -70,7 +87,7 @@ function clearAuthenticationDrafts() {
   passphraseDraft.value = ''
 }
 async function changeAuthenticationKind(event: Event) {
-  if (authenticationSaving.value) return
+  if (authenticationControlsBusy.value) return
   const session = selectedSession.value
   const kind = (event.target as HTMLSelectElement).value
   if (!session || (kind !== 'password' && kind !== 'private_key') || kind === session.auth.kind) return
@@ -81,18 +98,31 @@ async function changeAuthenticationKind(event: Event) {
   await persist()
 }
 async function choosePrivateKey() {
-  if (authenticationSaving.value) return
+  if (authenticationControlsBusy.value) return
   const sessionId = selectedSessionId.value
-  if (!sessionId || selectedSession.value?.auth.kind !== 'private_key') return
-  const path = await open({ multiple: false, directory: false })
-  if (typeof path !== 'string' || selectedSessionId.value !== sessionId) return
-  const session = store.sessions.find((item) => item.id === sessionId)
-  if (session?.auth.kind !== 'private_key') return
-  session.auth.path = path
-  await persist()
+  const auth = selectedSession.value?.auth
+  if (!sessionId || auth?.kind !== 'private_key') return
+  const generation = ++privateKeyPickerGeneration
+  authenticationPicking.value = true
+  try {
+    const path = await open({ multiple: false, directory: false })
+    if (generation !== privateKeyPickerGeneration || typeof path !== 'string' || selectedSessionId.value !== sessionId) return
+    const session = store.sessions.find((item) => item.id === sessionId)
+    if (session?.auth !== auth || session.auth.kind !== 'private_key') return
+    const previousPath = auth.path
+    session.auth.path = path
+    if (!(await saveConfig())) {
+      const originatingSession = store.sessions.find((item) => item.id === sessionId)
+      if (originatingSession?.auth === auth && originatingSession.auth.kind === 'private_key') originatingSession.auth.path = previousPath
+    }
+  } catch {
+    statusError.value = '选择私钥文件失败，请重试。'
+  } finally {
+    authenticationPicking.value = false
+  }
 }
 async function saveAuthentication() {
-  if (authenticationSaving.value) return
+  if (authenticationControlsBusy.value) return
   const session = selectedSession.value
   if (!session) return
   const sessionId = session.id
@@ -224,13 +254,16 @@ async function removeSession() {
   }
 }
 
-watch(selectedSessionId, clearAuthenticationDrafts)
+watch(selectedSessionId, () => {
+  privateKeyPickerGeneration += 1
+  clearAuthenticationDrafts()
+})
 onMounted(async () => { try { await store.initialize(); selectedSessionId.value = store.sessions[0]?.id ?? null } catch {} })
 </script>
 
 <template>
   <main data-testid="via-app" class="via-app">
-    <fieldset data-testid="app-interactions" class="app-interactions" :disabled="authenticationSaving">
+    <fieldset data-testid="app-interactions" class="app-interactions" :disabled="authenticationBusy">
     <header class="titlebar">
       <div class="brand"><span class="mark">V</span><span>Via</span><span class="version">V1 MVP</span></div>
       <div class="title-actions"><button type="button" @click="openTransfer('import')">⇩ 导入配置</button><button type="button" @click="openTransfer('export')">⇧ 导出配置</button><button type="button" @click="unlockOpen=true">⌁ 解锁凭据</button></div>
@@ -250,16 +283,16 @@ onMounted(async () => { try { await store.initialize(); selectedSessionId.value 
             <label>主机地址<input v-model="selectedSession.host" @change="persist" /></label>
             <label>SSH 端口<input v-model.number="selectedSession.port" type="number" @change="persist" /></label>
             <label>登录用户名<input v-model="selectedSession.user" @change="persist" /></label>
-            <label>认证方式<select :value="selectedSession.auth.kind" aria-label="认证方式" :disabled="authenticationSaving" @change="changeAuthenticationKind"><option value="password">密码</option><option value="private_key">私钥</option></select></label>
+            <label>认证方式<select :value="selectedSession.auth.kind" aria-label="认证方式" :disabled="authenticationControlsBusy" @change="changeAuthenticationKind"><option value="password">密码</option><option value="private_key">私钥</option></select></label>
             <template v-if="selectedSession.auth.kind === 'password'">
               <label class="authentication-field">SSH 密码<input v-model="passwordDraft" aria-label="SSH 密码" type="password" autocomplete="new-password" /></label>
             </template>
             <template v-else>
               <label class="authentication-field">私钥文件<input :value="selectedSession.auth.path" aria-label="私钥文件" readonly /></label>
-              <button data-testid="choose-private-key" class="secondary-button" type="button" :disabled="authenticationSaving" @click="choosePrivateKey">选择私钥</button>
+              <button data-testid="choose-private-key" class="secondary-button" type="button" :disabled="authenticationControlsBusy" @click="choosePrivateKey">选择私钥</button>
               <label class="authentication-field">私钥口令（可选）<input v-model="passphraseDraft" aria-label="私钥口令" type="password" autocomplete="new-password" /></label>
             </template>
-            <button data-testid="save-authentication" class="primary-button" type="button" :disabled="authenticationSaving" @click="saveAuthentication">保存认证信息</button>
+            <button data-testid="save-authentication" class="primary-button" type="button" :disabled="authenticationControlsBusy" @click="saveAuthentication">保存认证信息</button>
           </div>
         </section>
       </section>

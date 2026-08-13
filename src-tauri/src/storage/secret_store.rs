@@ -201,8 +201,11 @@ impl SecretStore {
     }
 
     pub fn put(&self, value: impl Into<String>) -> Result<Uuid, ViaError> {
-        let id = Uuid::new_v4();
         let value = value.into();
+        if value.trim().is_empty() {
+            return Err(ViaError::InvalidSecret);
+        }
+        let id = Uuid::new_v4();
         let mut state = self.state.lock().map_err(lock_error)?;
         if let Some(key) = state.key.as_ref() {
             let encrypted = encrypt(key, value.as_bytes())?;
@@ -247,6 +250,26 @@ impl SecretStore {
         let plaintext = decrypt(key, &encrypted)
             .map_err(|_| ViaError::Storage("encrypted secret authentication failed".into()))?;
         String::from_utf8(plaintext).map_err(|error| ViaError::Storage(error.to_string()))
+    }
+
+    pub fn delete(&self, id: Uuid) -> Result<(), ViaError> {
+        if self
+            .state
+            .lock()
+            .map_err(lock_error)?
+            .ephemeral
+            .remove(&id)
+            .is_some()
+        {
+            return Ok(());
+        }
+        self.connection()?
+            .execute(
+                "DELETE FROM encrypted_secrets WHERE id = ?1",
+                [id.to_string()],
+            )
+            .map_err(database_error)?;
+        Ok(())
     }
 
     fn unlock_and_migrate_legacy(

@@ -1,7 +1,217 @@
+use rusqlite::Connection;
 use uuid::Uuid;
 use via::{
-    AppConfig, AuthConfig, ConfigRepository, Group, ImportMode, LocalForwardRule, SessionConfig,
+    AppConfig, AuthConfig, ConfigRepository, Group, ImportMode, LocalForwardRule, SecretStore,
+    SessionConfig,
+    commands::config::{persist_session_secret, replace_auth_secret},
 };
+
+#[test]
+fn setting_a_password_secret_updates_only_that_sessions_secret_id() {
+    let password_session_id = Uuid::new_v4();
+    let private_key_session_id = Uuid::new_v4();
+    let group_id = Uuid::new_v4();
+    let secret_id = Uuid::new_v4();
+    let config = AppConfig {
+        schema_version: 1,
+        groups: vec![Group {
+            id: group_id,
+            name: "Default".into(),
+        }],
+        sessions: vec![
+            SessionConfig::new(
+                password_session_id,
+                group_id,
+                "password host",
+                "password.test",
+                22,
+                "user",
+                AuthConfig::Password { secret_id: None },
+            )
+            .unwrap(),
+            SessionConfig::new(
+                private_key_session_id,
+                group_id,
+                "key host",
+                "key.test",
+                22,
+                "user",
+                AuthConfig::PrivateKey {
+                    path: "/keys/id_ed25519".into(),
+                    passphrase_secret_id: None,
+                },
+            )
+            .unwrap(),
+        ],
+        rules: vec![],
+    };
+
+    let next = replace_auth_secret(config, password_session_id, secret_id).unwrap();
+
+    assert_eq!(
+        match &next
+            .sessions
+            .iter()
+            .find(|session| session.id == password_session_id)
+            .unwrap()
+            .auth
+        {
+            AuthConfig::Password { secret_id } => *secret_id,
+            AuthConfig::PrivateKey { .. } => None,
+        },
+        Some(secret_id)
+    );
+    assert!(matches!(
+        &next
+            .sessions
+            .iter()
+            .find(|session| session.id == private_key_session_id)
+            .unwrap()
+            .auth,
+        AuthConfig::PrivateKey {
+            path,
+            passphrase_secret_id: None
+        } if path == "/keys/id_ed25519"
+    ));
+}
+
+#[test]
+fn setting_a_private_key_secret_updates_its_passphrase_secret_id() {
+    let session_id = Uuid::new_v4();
+    let group_id = Uuid::new_v4();
+    let secret_id = Uuid::new_v4();
+    let config = AppConfig {
+        schema_version: 1,
+        groups: vec![Group {
+            id: group_id,
+            name: "Default".into(),
+        }],
+        sessions: vec![
+            SessionConfig::new(
+                session_id,
+                group_id,
+                "key host",
+                "key.test",
+                22,
+                "user",
+                AuthConfig::PrivateKey {
+                    path: "/keys/id_ed25519".into(),
+                    passphrase_secret_id: None,
+                },
+            )
+            .unwrap(),
+        ],
+        rules: vec![],
+    };
+
+    let next = replace_auth_secret(config, session_id, secret_id).unwrap();
+
+    assert_eq!(
+        match &next.sessions[0].auth {
+            AuthConfig::PrivateKey {
+                passphrase_secret_id,
+                ..
+            } => *passphrase_secret_id,
+            AuthConfig::Password { .. } => None,
+        },
+        Some(secret_id)
+    );
+}
+
+#[test]
+fn saving_a_session_secret_persists_its_reference_and_encrypted_value() {
+    let path = temp_config_path();
+    let repository = ConfigRepository::new(path.clone());
+    let secrets = SecretStore::new(path);
+    let session_id = Uuid::new_v4();
+    let group_id = Uuid::new_v4();
+    repository
+        .save(&AppConfig {
+            schema_version: 1,
+            groups: vec![Group {
+                id: group_id,
+                name: "Default".into(),
+            }],
+            sessions: vec![
+                SessionConfig::new(
+                    session_id,
+                    group_id,
+                    "password host",
+                    "password.test",
+                    22,
+                    "user",
+                    AuthConfig::Password { secret_id: None },
+                )
+                .unwrap(),
+            ],
+            rules: vec![],
+        })
+        .unwrap();
+    secrets.initialize("master password").unwrap();
+
+    let saved = persist_session_secret(&repository, &secrets, session_id, "ssh password").unwrap();
+
+    assert_eq!(repository.load().unwrap(), saved);
+    let secret_id = match saved.sessions[0].auth {
+        AuthConfig::Password {
+            secret_id: Some(secret_id),
+        } => secret_id,
+        _ => panic!("password secret reference was not saved"),
+    };
+    assert_eq!(secrets.get(secret_id).unwrap(), "ssh password");
+}
+
+#[test]
+fn failed_config_save_rolls_back_the_new_encrypted_secret() {
+    let path = temp_config_path();
+    let repository = ConfigRepository::new(path.clone());
+    let secrets = SecretStore::new(path.clone());
+    let session_id = Uuid::new_v4();
+    let group_id = Uuid::new_v4();
+    repository
+        .save(&AppConfig {
+            schema_version: 1,
+            groups: vec![Group {
+                id: group_id,
+                name: "Default".into(),
+            }],
+            sessions: vec![
+                SessionConfig::new(
+                    session_id,
+                    group_id,
+                    "password host",
+                    "password.test",
+                    22,
+                    "user",
+                    AuthConfig::Password { secret_id: None },
+                )
+                .unwrap(),
+            ],
+            rules: vec![],
+        })
+        .unwrap();
+    secrets.initialize("master password").unwrap();
+    Connection::open(&path)
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER reject_session_delete
+             BEFORE DELETE ON ssh_sessions
+             BEGIN
+               SELECT RAISE(ABORT, 'save blocked');
+             END;",
+        )
+        .unwrap();
+
+    assert!(persist_session_secret(&repository, &secrets, session_id, "ssh password").is_err());
+
+    let record_count: i64 = Connection::open(path)
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM encrypted_secrets", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(record_count, 0);
+}
 
 #[test]
 fn export_never_contains_secret_references_or_ciphertext() {

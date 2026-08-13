@@ -13,6 +13,7 @@ pub enum ViaError {
     SecretStoreLocked,
     InvalidMasterPassword,
     InvalidRecoveryCode,
+    InvalidSecret,
     HostTrustRequired {
         host: String,
         port: u16,

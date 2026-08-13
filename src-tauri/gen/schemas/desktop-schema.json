@@ -195,6 +195,18 @@
           "markdownDescription": "Enables the create_group command without any pre-configured scope."
         },
         {
+          "description": "Enables the delete_group command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-delete-group",
+          "markdownDescription": "Enables the delete_group command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the delete_rule command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-delete-rule",
+          "markdownDescription": "Enables the delete_rule command without any pre-configured scope."
+        },
+        {
           "description": "Enables the delete_session command without any pre-configured scope.",
           "type": "string",
           "const": "allow-delete-session",
@@ -219,6 +231,12 @@
           "markdownDescription": "Enables the import_config command without any pre-configured scope."
         },
         {
+          "description": "Enables the initialize_secrets command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-initialize-secrets",
+          "markdownDescription": "Enables the initialize_secrets command without any pre-configured scope."
+        },
+        {
           "description": "Enables the load_config command without any pre-configured scope.",
           "type": "string",
           "const": "allow-load-config",
@@ -237,10 +255,28 @@
           "markdownDescription": "Enables the poll_transports command without any pre-configured scope."
         },
         {
+          "description": "Enables the recover_secrets command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-recover-secrets",
+          "markdownDescription": "Enables the recover_secrets command without any pre-configured scope."
+        },
+        {
           "description": "Enables the save_config command without any pre-configured scope.",
           "type": "string",
           "const": "allow-save-config",
           "markdownDescription": "Enables the save_config command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_session_secret command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-session-secret",
+          "markdownDescription": "Enables the save_session_secret command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the secret_store_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-secret-store-status",
+          "markdownDescription": "Enables the secret_store_status command without any pre-configured scope."
         },
         {
           "description": "Enables the start_enabled_rules command without any pre-configured scope.",
@@ -291,6 +327,18 @@
           "markdownDescription": "Denies the create_group command without any pre-configured scope."
         },
         {
+          "description": "Denies the delete_group command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-delete-group",
+          "markdownDescription": "Denies the delete_group command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the delete_rule command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-delete-rule",
+          "markdownDescription": "Denies the delete_rule command without any pre-configured scope."
+        },
+        {
           "description": "Denies the delete_session command without any pre-configured scope.",
           "type": "string",
           "const": "deny-delete-session",
@@ -315,6 +363,12 @@
           "markdownDescription": "Denies the import_config command without any pre-configured scope."
         },
         {
+          "description": "Denies the initialize_secrets command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-initialize-secrets",
+          "markdownDescription": "Denies the initialize_secrets command without any pre-configured scope."
+        },
+        {
           "description": "Denies the load_config command without any pre-configured scope.",
           "type": "string",
           "const": "deny-load-config",
@@ -333,10 +387,28 @@
           "markdownDescription": "Denies the poll_transports command without any pre-configured scope."
         },
         {
+          "description": "Denies the recover_secrets command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-recover-secrets",
+          "markdownDescription": "Denies the recover_secrets command without any pre-configured scope."
+        },
+        {
           "description": "Denies the save_config command without any pre-configured scope.",
           "type": "string",
           "const": "deny-save-config",
           "markdownDescription": "Denies the save_config command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_session_secret command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-session-secret",
+          "markdownDescription": "Denies the save_session_secret command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the secret_store_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-secret-store-status",
+          "markdownDescription": "Denies the secret_store_status command without any pre-configured scope."
         },
         {
           "description": "Denies the start_enabled_rules command without any pre-configured scope.",

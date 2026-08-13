@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-rule"
+description = "Enables the delete_rule command without any pre-configured scope."
+commands.allow = ["delete_rule"]
+
+[[permission]]
+identifier = "deny-delete-rule"
+description = "Denies the delete_rule command without any pre-configured scope."
+commands.deny = ["delete_rule"]

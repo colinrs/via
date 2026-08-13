@@ -12,17 +12,18 @@ describe('RecoveryCodesDialog', () => {
     expect(wrapper.get('[data-testid="recovery-codes-list"]').classes()).toContain('selectable')
   })
 
-  it('only closes after explicit acknowledgement', async () => {
+  it('only acknowledges after the checked user action and never emits a generic close', async () => {
     const wrapper = mount(RecoveryCodesDialog, { props: { open: true, codes: ['A1-B2'] } })
     const action = wrapper.get('[data-testid="close-recovery-codes"]')
     expect((action.element as HTMLButtonElement).disabled).toBe(true)
     await action.trigger('click')
-    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(wrapper.emitted('acknowledge')).toBeUndefined()
 
     await wrapper.get('[aria-label="我已保存恢复码"]').setValue(true)
     await action.trigger('click')
 
-    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.emitted('acknowledge')).toEqual([[true]])
+    expect(wrapper.emitted('close')).toBeUndefined()
     expect((action.element as HTMLButtonElement).disabled).toBe(true)
   })
 

@@ -21,6 +21,7 @@ describe('SecretUnlockDialog', () => {
   it('emits recovery input only from recovery mode', async () => {
     const wrapper = mount(SecretUnlockDialog, { props: { open: true } })
     await wrapper.get('[data-testid="show-recovery"]').trigger('click')
+    expect(wrapper.emitted('mode-change')).toEqual([['recovery']])
     await wrapper.get('[aria-label="恢复码"]').setValue('code')
     await wrapper.get('[aria-label="新主密码"]').setValue('new password')
     await wrapper.get('[aria-label="确认新主密码"]').setValue('new password')

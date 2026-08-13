@@ -6,6 +6,7 @@ const emit = defineEmits<{
   close: []
   unlock: [password: string]
   recover: [code: string, password: string]
+  'mode-change': [mode: 'unlock' | 'recovery']
 }>()
 const mode = ref<'unlock' | 'recovery'>('unlock')
 const password = ref('')
@@ -27,6 +28,7 @@ function clearSecrets() {
 function selectMode(nextMode: 'unlock' | 'recovery') {
   clearSecrets()
   mode.value = nextMode
+  emit('mode-change', nextMode)
 }
 
 function submitUnlock() {

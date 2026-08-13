@@ -13,6 +13,7 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({ open }))
 
 import App from './App.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import RecoveryCodesDialog from './components/RecoveryCodesDialog.vue'
 import SecretSetupDialog from './components/SecretSetupDialog.vue'
 import SecretUnlockDialog from './components/SecretUnlockDialog.vue'
 
@@ -24,6 +25,10 @@ function deferred<T = void>() {
     reject = rejectPromise
   })
   return { promise, resolve, reject }
+}
+
+function recoveryCodes(prefix: string) {
+  return Array.from({ length: 10 }, (_, index) => `${prefix}-${index + 1}`)
 }
 
 function openConfirmDialog(wrapper: ReturnType<typeof mount>) {
@@ -131,9 +136,10 @@ describe('App', () => {
   })
 
   it('blocks workspace use with setup until an unconfigured vault has a master password and its codes are acknowledged', async () => {
+    const codes = recoveryCodes('SETUP')
     const wrapper = await mountAppWithSecretStatus({
       configured: false,
-      commandHandlers: { initialize_secrets: async () => ['A1-B2', 'C3-D4'] },
+      commandHandlers: { initialize_secrets: async () => codes },
     })
 
     expect(wrapper.get('[aria-label="初始化本地凭据"]')).toBeTruthy()
@@ -145,7 +151,7 @@ describe('App', () => {
 
     expect(invoke).toHaveBeenCalledWith('initialize_secrets', { masterPassword: 'new master password' })
     expect(wrapper.find('[aria-label="初始化本地凭据"]').exists()).toBe(false)
-    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('A1-B2')
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('SETUP-1')
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
 
     await wrapper.get('[aria-label="我已保存恢复码"]').setValue(true)
@@ -164,6 +170,21 @@ describe('App', () => {
     const failed = await mountAppWithListenerFailure()
     expect(failed.get('.statusbar').text()).toContain('无法连接本地后端')
     expect(failed.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+  })
+
+  it('fails closed when vault status is malformed', async () => {
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return {}
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+    const wrapper = mount(App)
+    await flushPromises()
+
+    expect(wrapper.get('.statusbar').text()).toContain('无法连接本地后端')
+    expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+    expect(wrapper.findAll('button').some((button) => button.text().includes('解锁凭据'))).toBe(false)
   })
 
   it('keeps setup open, reports a safe error, and invokes initialization only once while pending', async () => {
@@ -189,9 +210,10 @@ describe('App', () => {
   })
 
   it('shows legacy migration recovery codes after unlock and gates workspace until acknowledgement', async () => {
+    const codes = recoveryCodes('MIGRATION')
     const wrapper = await mountAppWithSecretStatus({
       configured: true,
-      commandHandlers: { unlock_secrets: async () => ['M1-N2'] },
+      commandHandlers: { unlock_secrets: async () => codes },
     })
     const unlockButton = wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!
     await unlockButton.trigger('click')
@@ -199,7 +221,7 @@ describe('App', () => {
     await flushPromises()
 
     expect(wrapper.find('[aria-label="解锁本地凭据"]').exists()).toBe(false)
-    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('M1-N2')
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('MIGRATION-1')
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
 
     await wrapper.get('[aria-label="我已保存恢复码"]').setValue(true)
@@ -236,16 +258,156 @@ describe('App', () => {
     })
     await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
+    await dialog.get('[data-testid="show-recovery"]').trigger('click')
     dialog.vm.$emit('recover', 'one-time-code', 'new master password')
     dialog.vm.$emit('recover', 'one-time-code', 'new master password')
     await wrapper.vm.$nextTick()
 
     expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(1)
-    pendingRecovery.resolve(['R1-S2', 'T3-U4'])
+    pendingRecovery.resolve(recoveryCodes('REPLACEMENT'))
     await flushPromises()
 
     expect(wrapper.find('[aria-label="解锁本地凭据"]').exists()).toBe(false)
-    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('R1-S2')
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('REPLACEMENT-1')
+  })
+
+  it('keeps setup active when setup returns the wrong number of recovery codes', async () => {
+    const wrapper = await mountAppWithSecretStatus({
+      configured: false,
+      commandHandlers: { initialize_secrets: async () => recoveryCodes('SHORT').slice(0, 9) },
+    })
+
+    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'new master password')
+    await flushPromises()
+
+    expect(wrapper.get('[aria-label="初始化本地凭据"]')).toBeTruthy()
+    expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+    expect(wrapper.get('.statusbar').text()).toContain('初始化本地凭据失败，请重试。')
+  })
+
+  it('keeps unlock open when legacy unlock returns malformed recovery codes', async () => {
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: { unlock_secrets: async () => undefined },
+    })
+    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+
+    wrapper.getComponent(SecretUnlockDialog).vm.$emit('unlock', 'master password')
+    await flushPromises()
+
+    expect(wrapper.get('[aria-label="解锁本地凭据"]')).toBeTruthy()
+    expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
+    expect(wrapper.get('.statusbar').text()).toContain('主密码不正确，无法解锁本地凭据。')
+  })
+
+  it('ignores generic close and out-of-context secret events while recovery codes are pending', async () => {
+    const codes = recoveryCodes('PENDING')
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: { unlock_secrets: async () => codes },
+    })
+    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    const unlockDialog = wrapper.getComponent(SecretUnlockDialog)
+    unlockDialog.vm.$emit('unlock', 'master password')
+    await flushPromises()
+    const unlockCalls = invoke.mock.calls.filter(([command]) => command === 'unlock_secrets').length
+    const recoveryCalls = invoke.mock.calls.filter(([command]) => command === 'recover_secrets').length
+    const setupCalls = invoke.mock.calls.filter(([command]) => command === 'initialize_secrets').length
+
+    wrapper.getComponent(RecoveryCodesDialog).vm.$emit('close')
+    unlockDialog.vm.$emit('unlock', 'master password')
+    unlockDialog.vm.$emit('recover', 'recovery code', 'new master password')
+    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'different password')
+    await flushPromises()
+
+    expect(invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')).toHaveLength(unlockCalls)
+    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(recoveryCalls)
+    expect(invoke.mock.calls.filter(([command]) => command === 'initialize_secrets')).toHaveLength(setupCalls)
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('PENDING-1')
+    expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+  })
+
+  it('accepts recovery only after the open unlock dialog enters recovery mode', async () => {
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: { recover_secrets: async () => recoveryCodes('RECOVERED') },
+    })
+    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    const dialog = wrapper.getComponent(SecretUnlockDialog)
+    const recoveryCalls = invoke.mock.calls.filter(([command]) => command === 'recover_secrets').length
+
+    dialog.vm.$emit('recover', 'recovery code', 'new master password')
+    await flushPromises()
+    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(recoveryCalls)
+
+    await dialog.get('[data-testid="show-recovery"]').trigger('click')
+    dialog.vm.$emit('recover', 'recovery code', 'new master password')
+    await flushPromises()
+    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(recoveryCalls + 1)
+  })
+
+  it('ignores secret events emitted from closed setup and unlock dialogs', async () => {
+    const wrapper = await mountAppWithSecretStatus({ configured: true })
+    const setupCalls = invoke.mock.calls.filter(([command]) => command === 'initialize_secrets').length
+    const unlockCalls = invoke.mock.calls.filter(([command]) => command === 'unlock_secrets').length
+    const recoveryCalls = invoke.mock.calls.filter(([command]) => command === 'recover_secrets').length
+
+    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'hidden master password')
+    const unlockDialog = wrapper.getComponent(SecretUnlockDialog)
+    unlockDialog.vm.$emit('unlock', 'hidden master password')
+    unlockDialog.vm.$emit('recover', 'hidden recovery code', 'hidden replacement password')
+    await flushPromises()
+
+    expect(invoke.mock.calls.filter(([command]) => command === 'initialize_secrets')).toHaveLength(setupCalls)
+    expect(invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')).toHaveLength(unlockCalls)
+    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(recoveryCalls)
+  })
+
+  it('ignores mode changes while recovery is in flight', async () => {
+    const pendingRecovery = deferred<string[]>()
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: { recover_secrets: () => pendingRecovery.promise },
+    })
+    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    const dialog = wrapper.getComponent(SecretUnlockDialog)
+    await dialog.get('[data-testid="show-recovery"]').trigger('click')
+    dialog.vm.$emit('recover', 'recovery code', 'new master password')
+    dialog.vm.$emit('mode-change', 'unlock')
+    pendingRecovery.reject(new Error('recovery failed'))
+    await flushPromises()
+    const unlockCalls = invoke.mock.calls.filter(([command]) => command === 'unlock_secrets').length
+
+    dialog.vm.$emit('unlock', 'master password')
+    await flushPromises()
+
+    expect(invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')).toHaveLength(unlockCalls)
+    expect(wrapper.get('[data-testid="recover-secrets-action"]')).toBeTruthy()
+  })
+
+  it('warns before window close while recovery codes await acknowledgement and removes the listener on unmount', async () => {
+    const addListener = vi.spyOn(window, 'addEventListener')
+    const removeListener = vi.spyOn(window, 'removeEventListener')
+    const wrapper = await mountAppWithSecretStatus({
+      configured: false,
+      commandHandlers: { initialize_secrets: async () => recoveryCodes('UNSAVED') },
+    })
+    const registration = addListener.mock.calls.find(([type]) => type === 'beforeunload')
+    expect(registration).toBeDefined()
+    const handler = registration![1] as EventListener
+
+    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'new master password')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('关闭窗口前请先保存并确认')
+    const event = new Event('beforeunload', { cancelable: true })
+    handler(event)
+    expect(event.defaultPrevented).toBe(true)
+
+    wrapper.unmount()
+    expect(removeListener).toHaveBeenCalledWith('beforeunload', handler)
+    addListener.mockRestore()
+    removeListener.mockRestore()
   })
 
   it('keeps recovery mode open and reports a recovery-specific safe error when recovery fails', async () => {

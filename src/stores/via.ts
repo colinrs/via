@@ -80,9 +80,21 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     replace(state.sessions, config.sessions)
     replace(state.rules, config.rules)
   }
+  const validateRecoveryCodes = (value: unknown): string[] => {
+    if (!Array.isArray(value)
+      || value.length !== 10
+      || value.some((code) => typeof code !== 'string' || code.trim().length === 0)
+      || new Set(value).size !== value.length) {
+      throw new Error('invalid recovery codes')
+    }
+    return value as string[]
+  }
   const refreshSecretStoreStatus = async (): Promise<string[] | null> => {
-    const status = await runtime.invoke<{ configured: boolean }>('secret_store_status')
-    state.secretStoreConfigured = status.configured
+    const status = await runtime.invoke<unknown>('secret_store_status')
+    if (!status || typeof status !== 'object' || typeof (status as { configured?: unknown }).configured !== 'boolean') {
+      throw new Error('invalid secret store status')
+    }
+    state.secretStoreConfigured = (status as { configured: boolean }).configured
     return null
   }
 
@@ -140,15 +152,16 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     },
     refreshSecretStoreStatus,
     async initializeSecrets(masterPassword: string) {
-      const codes = await runtime.invoke<string[]>('initialize_secrets', { masterPassword })
+      const codes = validateRecoveryCodes(await runtime.invoke<unknown>('initialize_secrets', { masterPassword }))
       state.secretStoreConfigured = true
       return codes
     },
     async unlockSecrets(masterPassword: string) {
-      return runtime.invoke<string[] | null>('unlock_secrets', { masterPassword })
+      const result = await runtime.invoke<unknown>('unlock_secrets', { masterPassword })
+      return result === null ? null : validateRecoveryCodes(result)
     },
     async recoverSecrets(recoveryCode: string, newMasterPassword: string) {
-      const codes = await runtime.invoke<string[]>('recover_secrets', { recoveryCode, newMasterPassword })
+      const codes = validateRecoveryCodes(await runtime.invoke<unknown>('recover_secrets', { recoveryCode, newMasterPassword }))
       state.secretStoreConfigured = true
       return codes
     },

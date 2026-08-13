@@ -2,12 +2,12 @@
 import { ref, watch } from 'vue'
 
 const props = defineProps<{ open: boolean; codes: string[] }>()
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ acknowledge: [acknowledged: true]; close: [] }>()
 const acknowledged = ref(false)
 
-function close() {
+function acknowledge() {
   if (!acknowledged.value) return
-  emit('close')
+  emit('acknowledge', true)
   acknowledged.value = false
 }
 
@@ -18,7 +18,7 @@ watch(() => props.open, () => { acknowledged.value = false })
   <div v-if="open" class="backdrop" role="dialog" aria-modal="true" aria-label="保存恢复码">
     <section class="dialog">
       <h2>保存恢复码</h2>
-      <p class="warning">这些恢复码仅显示一次。请立即复制并保存在安全的位置。</p>
+      <p class="warning">这些恢复码仅显示一次。请立即复制并保存在安全的位置；关闭窗口前请先保存并确认，否则无法再次查看。</p>
       <ol data-testid="recovery-codes-list" class="codes selectable">
         <li v-for="(code, index) in codes" :key="index"><code data-testid="recovery-code">{{ code }}</code></li>
       </ol>
@@ -27,7 +27,7 @@ watch(() => props.open, () => { acknowledged.value = false })
         我已将恢复码保存在安全的位置
       </label>
       <footer>
-        <button data-testid="close-recovery-codes" class="primary" type="button" :disabled="!acknowledged" @click="close">我已保存</button>
+        <button data-testid="close-recovery-codes" class="primary" type="button" :disabled="!acknowledged" @click="acknowledge">我已保存</button>
       </footer>
     </section>
   </div>

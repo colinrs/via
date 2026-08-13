@@ -3,6 +3,7 @@ import { createViaStore, type ViaBridge } from './via'
 
 describe('ViaStore', () => {
   const emptyConfig = { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+  const tenCodes = Array.from({ length: 10 }, (_, index) => `CODE-${index + 1}`)
 
   it('retries startup loading and becomes ready after the backend is available', async () => {
     vi.useFakeTimers()
@@ -98,6 +99,18 @@ describe('ViaStore', () => {
     expect(invoke).toHaveBeenCalledWith('secret_store_status')
   })
 
+  it('fails closed when secret-store status is malformed', async () => {
+    const invoke = vi.fn().mockImplementation((command: string) => command === 'load_config'
+      ? emptyConfig
+      : command === 'secret_store_status' ? {} : undefined)
+    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+
+    await expect(store.initialize()).rejects.toThrow('invalid secret store status')
+
+    expect(store.initializationState).toBe('failed')
+    expect(store.secretStoreConfigured).toBeNull()
+  })
+
   it('refreshes configured vault status without inventing recovery codes', async () => {
     const invoke = vi.fn().mockResolvedValue({ configured: true })
     const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
@@ -109,10 +122,10 @@ describe('ViaStore', () => {
   })
 
   it('initializes the vault and returns its one-time recovery codes', async () => {
-    const invoke = vi.fn().mockResolvedValue(['A1-B2', 'C3-D4'])
+    const invoke = vi.fn().mockResolvedValue(tenCodes)
     const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
 
-    await expect(store.initializeSecrets('new password')).resolves.toEqual(['A1-B2', 'C3-D4'])
+    await expect(store.initializeSecrets('new password')).resolves.toEqual(tenCodes)
 
     expect(store.secretStoreConfigured).toBe(true)
     expect(invoke).toHaveBeenCalledWith('initialize_secrets', { masterPassword: 'new password' })
@@ -120,25 +133,51 @@ describe('ViaStore', () => {
   })
 
   it('returns optional migration recovery codes when unlocking the vault', async () => {
-    const invoke = vi.fn().mockResolvedValue(['M1-N2'])
+    const invoke = vi.fn().mockResolvedValue(tenCodes)
     const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
 
-    await expect(store.unlockSecrets('master password')).resolves.toEqual(['M1-N2'])
+    await expect(store.unlockSecrets('master password')).resolves.toEqual(tenCodes)
 
     expect(invoke).toHaveBeenCalledWith('unlock_secrets', { masterPassword: 'master password' })
     expect(JSON.stringify(store)).not.toContain('master password')
   })
 
   it('sends recovery credentials without retaining them in global state', async () => {
-    const invoke = vi.fn().mockResolvedValue(['A1-B2'])
+    const invoke = vi.fn().mockResolvedValue(tenCodes)
     const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
 
-    await expect(store.recoverSecrets('old-code', 'new password')).resolves.toEqual(['A1-B2'])
+    await expect(store.recoverSecrets('old-code', 'new password')).resolves.toEqual(tenCodes)
 
     expect(store.secretStoreConfigured).toBe(true)
     expect(invoke).toHaveBeenCalledWith('recover_secrets', { recoveryCode: 'old-code', newMasterPassword: 'new password' })
     expect(JSON.stringify(store)).not.toContain('old-code')
     expect(JSON.stringify(store)).not.toContain('new password')
+  })
+
+  it('rejects malformed recovery-code results without marking setup complete', async () => {
+    const invoke = vi.fn().mockResolvedValue(['ONLY-ONE'])
+    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+
+    await expect(store.initializeSecrets('new password')).rejects.toThrow('invalid recovery codes')
+
+    expect(store.secretStoreConfigured).toBeNull()
+  })
+
+  it('accepts only null or ten unique nonblank codes from unlock', async () => {
+    const invalidResults: unknown[] = [undefined, ['ONE'], [...tenCodes.slice(0, 9), tenCodes[0]], [...tenCodes.slice(0, 9), '   ']]
+    for (const result of invalidResults) {
+      const store = createViaStore({
+        invoke: vi.fn().mockResolvedValue(result),
+        listen: vi.fn().mockResolvedValue(() => {}),
+      } as ViaBridge)
+      await expect(store.unlockSecrets('master password')).rejects.toThrow('invalid recovery codes')
+    }
+
+    const store = createViaStore({
+      invoke: vi.fn().mockResolvedValue(null),
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
+    await expect(store.unlockSecrets('master password')).resolves.toBeNull()
   })
 
   it('replaces local configuration after atomically saving a session secret', async () => {

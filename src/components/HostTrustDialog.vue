@@ -1,15 +1,18 @@
 <script setup lang="ts">
+import { injectI18n } from '../i18n'
+
 defineProps<{ open: boolean; host: string; port: number; algorithm: string; fingerprint: string }>()
 const emit = defineEmits<{ close: []; approve: [] }>()
+const { t } = injectI18n()
 </script>
 
 <template>
-  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" aria-label="确认 SSH 主机指纹">
+  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" :aria-label="t('dialog.hostTrust.title')">
     <section class="dialog">
-      <h2>确认 SSH 主机指纹</h2>
-      <p>这是首次连接此主机。请核对指纹后再保存信任记录。</p>
-      <dl><dt>主机</dt><dd>{{ host }}:{{ port }}</dd><dt>算法</dt><dd>{{ algorithm }}</dd><dt>SHA-256 指纹</dt><dd class="fingerprint">{{ fingerprint }}</dd></dl>
-      <footer><button type="button" @click="emit('close')">取消</button><button class="primary" type="button" @click="emit('approve')">信任并连接</button></footer>
+      <h2>{{ t('dialog.hostTrust.title') }}</h2>
+      <p>{{ t('dialog.hostTrust.description') }}</p>
+      <dl><dt>{{ t('dialog.hostTrust.host') }}</dt><dd>{{ host }}:{{ port }}</dd><dt>{{ t('dialog.hostTrust.algorithm') }}</dt><dd>{{ algorithm }}</dd><dt>{{ t('dialog.hostTrust.fingerprint') }}</dt><dd class="fingerprint">{{ fingerprint }}</dd></dl>
+      <footer><button type="button" @click="emit('close')">{{ t('common.cancel') }}</button><button class="primary" type="button" @click="emit('approve')">{{ t('action.trustAndConnect') }}</button></footer>
     </section>
   </div>
 </template>

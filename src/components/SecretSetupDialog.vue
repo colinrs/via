@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+import { injectI18n } from '../i18n'
+
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: []; setup: [password: string] }>()
 const password = ref('')
 const confirmation = ref('')
+const { t } = injectI18n()
 const canSetup = computed(() => password.value.trim().length > 0 && password.value === confirmation.value)
 
 function clearSecrets() {
@@ -27,21 +30,21 @@ watch(() => props.open, clearSecrets)
 </script>
 
 <template>
-  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" aria-label="初始化本地凭据">
+  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" :aria-label="t('dialog.secretSetup.title')">
     <section class="dialog">
-      <h2>初始化本地凭据</h2>
-      <p>设置应用主密码，用于加密保存在这台设备上的 SSH 密码和私钥口令。</p>
+      <h2>{{ t('dialog.secretSetup.title') }}</h2>
+      <p>{{ t('dialog.secretSetup.description') }}</p>
       <label>
-        主密码
-        <input v-model="password" type="password" autocomplete="new-password" aria-label="主密码" autofocus>
+        {{ t('field.masterPassword') }}
+        <input v-model="password" type="password" autocomplete="new-password" :aria-label="t('field.masterPassword')" autofocus>
       </label>
       <label>
-        确认主密码
-        <input v-model="confirmation" type="password" autocomplete="new-password" aria-label="确认主密码" @keyup.enter="submit">
+        {{ t('field.confirmMasterPassword') }}
+        <input v-model="confirmation" type="password" autocomplete="new-password" :aria-label="t('field.confirmMasterPassword')" @keyup.enter="submit">
       </label>
       <footer>
-        <button data-testid="close-secret-setup" type="button" @click="close">取消</button>
-        <button data-testid="setup-secrets-action" class="primary" type="button" :disabled="!canSetup" @click="submit">创建凭据库</button>
+        <button data-testid="close-secret-setup" type="button" @click="close">{{ t('common.cancel') }}</button>
+        <button data-testid="setup-secrets-action" class="primary" type="button" :disabled="!canSetup" @click="submit">{{ t('action.createCredentialStore') }}</button>
       </footer>
     </section>
   </div>

@@ -2,16 +2,18 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import ConfirmDialog from './ConfirmDialog.vue'
+import { withChineseI18n } from '../test/i18n'
 
 describe('ConfirmDialog', () => {
   it('emits confirm from the explicit destructive action', async () => {
-    const wrapper = mount(ConfirmDialog, { props: { open: true, title: '删除会话', message: '会删除规则', confirmText: '删除', generation: 42 } })
+    const wrapper = mount(ConfirmDialog, { ...withChineseI18n(), props: { open: true, title: '删除会话', message: '会删除规则', confirmText: '删除', generation: 42 } })
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
     expect(wrapper.emitted('confirm')).toEqual([[42]])
   })
 
   it('disables cancellation and repeated confirmation while busy', async () => {
     const wrapper = mount(ConfirmDialog, {
+      ...withChineseI18n(),
       props: { open: true, title: '删除会话', message: '会删除规则', confirmText: '删除', busy: true },
     })
 

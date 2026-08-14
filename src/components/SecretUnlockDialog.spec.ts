@@ -2,10 +2,11 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import SecretUnlockDialog from './SecretUnlockDialog.vue'
+import { withChineseI18n } from '../test/i18n'
 
 describe('SecretUnlockDialog', () => {
   it('emits a nonblank password from unlock mode and clears it', async () => {
-    const wrapper = mount(SecretUnlockDialog, { props: { open: true } })
+    const wrapper = mount(SecretUnlockDialog, { ...withChineseI18n(), props: { open: true } })
     const password = wrapper.get('[aria-label="应用主密码"]')
     const action = wrapper.get('[data-testid="unlock-secrets-action"]')
     expect((action.element as HTMLButtonElement).disabled).toBe(true)
@@ -19,7 +20,7 @@ describe('SecretUnlockDialog', () => {
   })
 
   it('emits recovery input only from recovery mode', async () => {
-    const wrapper = mount(SecretUnlockDialog, { props: { open: true } })
+    const wrapper = mount(SecretUnlockDialog, { ...withChineseI18n(), props: { open: true } })
     await wrapper.get('[data-testid="show-recovery"]').trigger('click')
     expect(wrapper.emitted('mode-change')).toEqual([['recovery']])
     await wrapper.get('[aria-label="恢复码"]').setValue('code')
@@ -34,7 +35,7 @@ describe('SecretUnlockDialog', () => {
   })
 
   it('requires a code and matching nonblank replacement passwords', async () => {
-    const wrapper = mount(SecretUnlockDialog, { props: { open: true } })
+    const wrapper = mount(SecretUnlockDialog, { ...withChineseI18n(), props: { open: true } })
     await wrapper.get('[data-testid="show-recovery"]').trigger('click')
     const action = wrapper.get('[data-testid="recover-secrets-action"]')
 
@@ -53,7 +54,7 @@ describe('SecretUnlockDialog', () => {
   })
 
   it('clears every secret when switching modes, closing, or reopening', async () => {
-    const wrapper = mount(SecretUnlockDialog, { props: { open: true } })
+    const wrapper = mount(SecretUnlockDialog, { ...withChineseI18n(), props: { open: true } })
     await wrapper.get('[aria-label="应用主密码"]').setValue('old password')
     await wrapper.get('[data-testid="show-recovery"]').trigger('click')
     await wrapper.get('[aria-label="恢复码"]').setValue('recovery-code')
@@ -73,7 +74,7 @@ describe('SecretUnlockDialog', () => {
   })
 
   it('uses credential-specific autocomplete hints in recovery mode', async () => {
-    const wrapper = mount(SecretUnlockDialog, { props: { open: true } })
+    const wrapper = mount(SecretUnlockDialog, { ...withChineseI18n(), props: { open: true } })
     await wrapper.get('[data-testid="show-recovery"]').trigger('click')
     expect(wrapper.get('[aria-label="恢复码"]').attributes('autocomplete')).toBe('one-time-code')
     expect(wrapper.get('[aria-label="新主密码"]').attributes('autocomplete')).toBe('new-password')

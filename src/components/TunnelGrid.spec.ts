@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import TunnelGrid from './TunnelGrid.vue'
 import type { LocalForwardRule } from '../types/via'
+import { withChineseI18n } from '../test/i18n'
 
 const rules: LocalForwardRule[] = Array.from({ length: 100 }, (_, index) => ({
   id: `rule-${index}`,
@@ -17,7 +18,7 @@ const rules: LocalForwardRule[] = Array.from({ length: 100 }, (_, index) => ({
 
 describe('TunnelGrid', () => {
   it('windows a large rule list and keeps search results visible', async () => {
-    const wrapper = mount(TunnelGrid, { props: { rules } })
+    const wrapper = mount(TunnelGrid, { ...withChineseI18n(), props: { rules } })
 
     expect(wrapper.findAll('tbody tr')).toHaveLength(32)
     await wrapper.get('input[placeholder]').setValue('find-me')
@@ -26,7 +27,7 @@ describe('TunnelGrid', () => {
   })
 
   it('emits a rule-level toggle without treating ordinary edits as a start request', async () => {
-    const wrapper = mount(TunnelGrid, { props: { rules: [rules[0]] } })
+    const wrapper = mount(TunnelGrid, { ...withChineseI18n(), props: { rules: [rules[0]] } })
     await wrapper.get('input[type="checkbox"]').setValue(false)
 
     expect(wrapper.emitted('toggle')?.[0][0]).toMatchObject({ id: 'rule-0', enabled: false })
@@ -34,7 +35,7 @@ describe('TunnelGrid', () => {
   })
 
   it('emits the selected rule id from its delete control', async () => {
-    const wrapper = mount(TunnelGrid, { props: { rules: [rules[0]] } })
+    const wrapper = mount(TunnelGrid, { ...withChineseI18n(), props: { rules: [rules[0]] } })
 
     await wrapper.get('[title="删除规则"]').trigger('click')
 

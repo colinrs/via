@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue'
+import { inject, provide, ref, type InjectionKey, type Ref } from 'vue'
 
 import type { AppPreferences } from '../stores/via'
 import { catalogs, type TranslationKey } from './catalog'
@@ -37,6 +37,16 @@ export interface I18n {
   locale: Ref<SupportedLocale>
   t: Translate
   setLanguage: (language: LanguagePreference, navigatorLanguage?: string) => void
+}
+
+export const i18nInjectionKey: InjectionKey<I18n> = Symbol('via-i18n')
+
+export function provideI18n(i18n: I18n): void {
+  provide(i18nInjectionKey, i18n)
+}
+
+export function injectI18n(): I18n {
+  return inject(i18nInjectionKey, () => createI18n('en'), true)
 }
 
 export function createI18n(initial: LanguagePreference, navigatorLanguage = browserLanguage()): I18n {

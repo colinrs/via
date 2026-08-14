@@ -16,6 +16,7 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import RecoveryCodesDialog from './components/RecoveryCodesDialog.vue'
 import SecretSetupDialog from './components/SecretSetupDialog.vue'
 import SecretUnlockDialog from './components/SecretUnlockDialog.vue'
+import { createI18n } from './i18n'
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -35,6 +36,10 @@ function openConfirmDialog(wrapper: ReturnType<typeof mount>) {
   return wrapper.findAllComponents(ConfirmDialog).find((dialog) => dialog.props('open'))!
 }
 
+function mountChineseApp() {
+  return mount(App, { props: { i18n: createI18n('zh-CN') } })
+}
+
 function mountAppWithGroups(groups: Array<{ id: string; name: string }>) {
   invoke.mockImplementation(async (command: string) => {
     if (command === 'load_config') return { schemaVersion: 1, groups, sessions: [], rules: [] }
@@ -43,7 +48,7 @@ function mountAppWithGroups(groups: Array<{ id: string; name: string }>) {
   })
   listen.mockResolvedValue(() => undefined)
 
-  const wrapper = mount(App)
+  const wrapper = mountChineseApp()
   return flushPromises().then(() => wrapper)
 }
 
@@ -86,7 +91,7 @@ function mountAppWithConfig(config: {
   })
   listen.mockResolvedValue(() => undefined)
 
-  const wrapper = mount(App)
+  const wrapper = mountChineseApp()
   return flushPromises().then(() => wrapper)
 }
 
@@ -97,7 +102,7 @@ function mountAppWithPendingConfig() {
   })
   listen.mockResolvedValue(() => undefined)
 
-  return mount(App)
+  return mountChineseApp()
 }
 
 function mountAppWithListenerFailure() {
@@ -108,7 +113,7 @@ function mountAppWithListenerFailure() {
   })
   listen.mockRejectedValue(new Error('listener unavailable'))
 
-  const wrapper = mount(App)
+  const wrapper = mountChineseApp()
   return flushPromises().then(() => wrapper)
 }
 
@@ -126,6 +131,29 @@ function mountAppWithSecretStatus({
 }
 
 describe('App', () => {
+  it('provides one reactive translation instance to app copy and child components', async () => {
+    const i18n = createI18n('en')
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+
+    const wrapper = mount(App, { props: { i18n } })
+    await flushPromises()
+    expect(wrapper.get('.title-actions').text()).toContain('Import configuration')
+    expect(wrapper.get('[data-testid="empty-workspace"]').text()).toContain('No SSH sessions yet')
+    expect(wrapper.get('.statusbar').text()).toContain('Tunnels: 0 running / 0 issues')
+
+    i18n.setLanguage('zh-CN')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('.title-actions').text()).toContain('导入配置')
+    expect(wrapper.get('[data-testid="empty-workspace"]').text()).toContain('还没有 SSH 会话')
+    expect(wrapper.get('.statusbar').text()).toContain('隧道：0 运行中 / 0 异常')
+    expect(wrapper.text()).not.toContain('No SSH sessions yet')
+  })
+
   it('renders the tunnel management workspace after startup confirms a configured vault', async () => {
     const wrapper = await mountAppWithSecretStatus({ configured: true })
 
@@ -179,7 +207,7 @@ describe('App', () => {
       return undefined
     })
     listen.mockResolvedValue(() => undefined)
-    const wrapper = mount(App)
+    const wrapper = mountChineseApp()
     await flushPromises()
 
     expect(wrapper.get('.statusbar').text()).toContain('无法连接本地后端')
@@ -505,7 +533,7 @@ describe('App', () => {
     dialog.vm.$emit('recover', 'SECRET-INPUT', 'NEW-MASTER-PASSWORD')
     await flushPromises()
 
-    expect(wrapper.get('[aria-label="解锁本地凭据"]')).toBeTruthy()
+    expect(wrapper.get('[aria-label="恢复本地凭据"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="recover-secrets-action"]')).toBeTruthy()
     expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
     expect(wrapper.get('.statusbar').text()).toContain('恢复本地凭据失败，请检查恢复码后重试。')
@@ -556,12 +584,12 @@ describe('App', () => {
       return undefined
     })
     listen.mockResolvedValue(() => undefined)
-    const wrapper = mount(App)
+    const wrapper = mountChineseApp()
     await flushPromises()
 
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
     await flushPromises()
-    await wrapper.get('[aria-label="私钥口令"]').setValue('key passphrase')
+    await wrapper.get('[aria-label="私钥口令（可选）"]').setValue('key passphrase')
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
 
@@ -594,7 +622,7 @@ describe('App', () => {
 
     let savedAuth = invoke.mock.calls.filter(([command]) => command === 'save_config').at(-1)![1].config.sessions[0].auth
     expect(savedAuth).toEqual({ kind: 'private_key', path: '', passphraseSecretId: null })
-    await wrapper.get('[aria-label="私钥口令"]').setValue('passphrase draft')
+    await wrapper.get('[aria-label="私钥口令（可选）"]').setValue('passphrase draft')
 
     await wrapper.get('select[aria-label="认证方式"]').setValue('password')
     await flushPromises()
@@ -633,7 +661,7 @@ describe('App', () => {
       sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
       rules: [],
     })
-    await wrapper.get('[aria-label="私钥口令"]').setValue('key passphrase')
+    await wrapper.get('[aria-label="私钥口令（可选）"]').setValue('key passphrase')
     const configSavesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_config').length
     const secretSavesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_session_secret').length
 
@@ -802,13 +830,13 @@ describe('App', () => {
       return undefined
     })
     listen.mockResolvedValue(() => undefined)
-    const wrapper = mount(App)
+    const wrapper = mountChineseApp()
     await flushPromises()
     const callsBeforePick = invoke.mock.calls.length
 
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
     await flushPromises()
-    await wrapper.get('[aria-label="私钥口令"]').setValue('passphrase')
+    await wrapper.get('[aria-label="私钥口令（可选）"]').setValue('passphrase')
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
 
@@ -834,7 +862,7 @@ describe('App', () => {
       return undefined
     })
     listen.mockResolvedValue(() => undefined)
-    const wrapper = mount(App)
+    const wrapper = mountChineseApp()
     await flushPromises()
 
     await wrapper.get('[aria-label="SSH 密码"]').setValue('  valid password  ')

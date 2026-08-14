@@ -1,13 +1,16 @@
 <script setup lang="ts">
+import { injectI18n } from '../i18n'
+
 const emit = defineEmits<{ create: [] }>()
+const { t } = injectI18n()
 </script>
 
 <template>
   <section class="empty-workspace" data-testid="empty-workspace">
     <div class="empty-icon" aria-hidden="true">⇄</div>
-    <h1>还没有 SSH 会话</h1>
-    <p>新建一个 SSH 会话，然后添加仅绑定到 127.0.0.1 的 Local 转发规则。</p>
-    <button class="primary-button" type="button" @click="emit('create')">＋ 新建 SSH 会话</button>
+    <h1>{{ t('empty.title') }}</h1>
+    <p>{{ t('empty.description') }}</p>
+    <button class="primary-button" type="button" @click="emit('create')"><span aria-hidden="true">＋</span> {{ t('action.newSshSession') }}</button>
   </section>
 </template>
 

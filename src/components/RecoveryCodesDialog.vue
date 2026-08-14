@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
+import { injectI18n } from '../i18n'
+
 const props = defineProps<{ open: boolean; codes: string[] }>()
 const emit = defineEmits<{ acknowledge: [acknowledged: true]; close: [] }>()
 const acknowledged = ref(false)
+const { t } = injectI18n()
 
 function acknowledge() {
   if (!acknowledged.value) return
@@ -15,19 +18,19 @@ watch(() => props.open, () => { acknowledged.value = false })
 </script>
 
 <template>
-  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" aria-label="保存恢复码">
+  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" :aria-label="t('dialog.recoveryCodes.title')">
     <section class="dialog">
-      <h2>保存恢复码</h2>
-      <p class="warning">这些恢复码仅显示一次。请立即复制并保存在安全的位置；关闭窗口前请先保存并确认，否则无法再次查看。</p>
+      <h2>{{ t('dialog.recoveryCodes.title') }}</h2>
+      <p class="warning">{{ t('dialog.recoveryCodes.warning') }}</p>
       <ol data-testid="recovery-codes-list" class="codes selectable">
         <li v-for="(code, index) in codes" :key="index"><code data-testid="recovery-code">{{ code }}</code></li>
       </ol>
       <label class="acknowledgement">
-        <input v-model="acknowledged" type="checkbox" aria-label="我已保存恢复码">
-        我已将恢复码保存在安全的位置
+        <input v-model="acknowledged" type="checkbox" :aria-label="t('aria.recoveryCodesAcknowledged')">
+        {{ t('dialog.recoveryCodes.acknowledge') }}
       </label>
       <footer>
-        <button data-testid="close-recovery-codes" class="primary" type="button" :disabled="!acknowledged" @click="acknowledge">我已保存</button>
+        <button data-testid="close-recovery-codes" class="primary" type="button" :disabled="!acknowledged" @click="acknowledge">{{ t('action.iSaved') }}</button>
       </footer>
     </section>
   </div>

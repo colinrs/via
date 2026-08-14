@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+import { injectI18n } from '../i18n'
 import type { LocalForwardRule, TunnelState } from '../types/via'
 
 const props = defineProps<{ rules: LocalForwardRule[] }>()
@@ -13,6 +14,7 @@ const emit = defineEmits<{
   startAll: []
   stopAll: []
 }>()
+const { t } = injectI18n()
 
 const query = ref('')
 const scrollTop = ref(0)
@@ -29,7 +31,7 @@ const tableHeight = computed(() => `${Math.max(1, filteredRules.value.length) * 
 const tableOffset = computed(() => `${firstVisible.value * rowHeight}px`)
 watch(query, () => { scrollTop.value = 0 })
 
-const stateLabel: Record<TunnelState, string> = { stopped: '已停止', starting: '启动中', active: '运行中', reconnecting: '重连中', conflict: '端口冲突', failed: '失败' }
+const stateLabel = (state: TunnelState) => t(`state.${state}`)
 const stateClass = (state: TunnelState) => `state-${state}`
 const patch = (rule: LocalForwardRule, fields: Partial<LocalForwardRule>) => emit('update', { ...rule, ...fields })
 const onScroll = (event: Event) => { scrollTop.value = (event.target as HTMLElement).scrollTop }
@@ -39,31 +41,31 @@ const onScroll = (event: Event) => { scrollTop.value = (event.target as HTMLElem
   <section data-testid="tunnel-grid" class="grid-section">
     <div class="toolbar">
       <div class="toolbar-actions">
-        <button class="primary-button" type="button" @click="emit('add')">＋ 添加规则</button>
-        <button class="success-button" type="button" @click="emit('startAll')">⚡ 启动所有</button>
-        <button class="secondary-button" type="button" @click="emit('stopAll')">■ 全部关闭</button>
+        <button class="primary-button" type="button" @click="emit('add')">{{ t('action.addRule') }}</button>
+        <button class="success-button" type="button" @click="emit('startAll')">{{ t('action.startAll') }}</button>
+        <button class="secondary-button" type="button" @click="emit('stopAll')">{{ t('action.stopAll') }}</button>
       </div>
-      <label class="search"><span aria-hidden="true">⌕</span><input v-model="query" placeholder="搜索端口、目标主机或备注" /></label>
+      <label class="search"><span aria-hidden="true">⌕</span><input v-model="query" :placeholder="t('placeholder.searchRules')" /></label>
     </div>
 
     <div class="table-scroll" @scroll="onScroll">
       <table :style="{ minHeight: tableHeight }">
-        <thead><tr><th>状态</th><th>开关</th><th>本地端口</th><th>目标主机</th><th>目标端口</th><th>备注</th><th>操作</th></tr></thead>
+        <thead><tr><th>{{ t('table.status') }}</th><th>{{ t('table.toggle') }}</th><th>{{ t('field.localPort') }}</th><th>{{ t('field.targetHost') }}</th><th>{{ t('field.targetPort') }}</th><th>{{ t('field.note') }}</th><th>{{ t('table.actions') }}</th></tr></thead>
         <tbody :style="{ transform: `translateY(${tableOffset})` }">
           <tr v-for="rule in visibleRules" :key="rule.id" :class="{ conflict: rule.runtimeState === 'conflict' }">
-            <td><span class="state" :class="stateClass(rule.runtimeState)"><i />{{ stateLabel[rule.runtimeState] }}</span></td>
+            <td><span class="state" :class="stateClass(rule.runtimeState)"><i />{{ stateLabel(rule.runtimeState) }}</span></td>
             <td class="center"><label class="switch"><input :checked="rule.enabled" type="checkbox" @change="emit('toggle', { ...rule, enabled: !rule.enabled })" /><span /></label></td>
-            <td><input class="port-input" :value="rule.localPort" type="number" min="1" max="65535" aria-label="本地端口" @change="patch(rule, { localPort: Number(($event.target as HTMLInputElement).value) })" /></td>
-            <td><input :value="rule.targetHost" aria-label="目标主机" @change="patch(rule, { targetHost: ($event.target as HTMLInputElement).value })" /></td>
-            <td><input class="port-input" :value="rule.targetPort" type="number" min="1" max="65535" aria-label="目标端口" @change="patch(rule, { targetPort: Number(($event.target as HTMLInputElement).value) })" /></td>
-            <td><input :value="rule.note" aria-label="备注" @change="patch(rule, { note: ($event.target as HTMLInputElement).value })" /></td>
-            <td class="row-actions"><button type="button" title="克隆此规则" @click="emit('clone', rule.id)">⧉</button><button class="danger-icon" type="button" title="删除规则" @click="emit('remove', rule.id)">⌫</button></td>
+            <td><input class="port-input" :value="rule.localPort" type="number" min="1" max="65535" :aria-label="t('field.localPort')" @change="patch(rule, { localPort: Number(($event.target as HTMLInputElement).value) })" /></td>
+            <td><input :value="rule.targetHost" :aria-label="t('field.targetHost')" @change="patch(rule, { targetHost: ($event.target as HTMLInputElement).value })" /></td>
+            <td><input class="port-input" :value="rule.targetPort" type="number" min="1" max="65535" :aria-label="t('field.targetPort')" @change="patch(rule, { targetPort: Number(($event.target as HTMLInputElement).value) })" /></td>
+            <td><input :value="rule.note" :aria-label="t('field.note')" @change="patch(rule, { note: ($event.target as HTMLInputElement).value })" /></td>
+            <td class="row-actions"><button type="button" :title="t('action.cloneRule')" @click="emit('clone', rule.id)">⧉</button><button class="danger-icon" type="button" :title="t('action.deleteRule')" @click="emit('remove', rule.id)">⌫</button></td>
           </tr>
-          <tr v-if="filteredRules.length === 0"><td class="empty" colspan="7">未找到匹配的转发规则</td></tr>
+          <tr v-if="filteredRules.length === 0"><td class="empty" colspan="7">{{ t('message.noMatchingRules') }}</td></tr>
         </tbody>
       </table>
     </div>
-    <p v-if="rules.some((rule) => rule.runtimeState === 'conflict')" class="diagnostic"><strong>端口冲突：</strong>本地端口已被其他进程占用。请修改端口后重试；其他隧道不受影响。</p>
+    <p v-if="rules.some((rule) => rule.runtimeState === 'conflict')" class="diagnostic"><strong>{{ t('message.portConflictTitle') }}</strong>{{ t('message.portConflict') }}</p>
   </section>
 </template>
 

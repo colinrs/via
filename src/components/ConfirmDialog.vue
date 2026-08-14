@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 
+import { injectI18n } from '../i18n'
+
 const props = withDefaults(defineProps<{ open: boolean; title: string; message: string; confirmText: string; busy?: boolean; generation?: number }>(), {
   busy: false,
   generation: 0,
 })
 const emit = defineEmits<{ close: []; confirm: [generation: number]; ready: [generation: number] }>()
+const { t } = injectI18n()
 
 onMounted(() => emit('ready', props.generation))
 
@@ -19,8 +22,8 @@ function confirm() { if (!props.busy) emit('confirm', props.generation) }
       <h2>{{ title }}</h2>
       <p>{{ message }}</p>
       <footer>
-        <button type="button" :disabled="busy" @click="close">取消</button>
-        <button data-testid="confirm-dialog-action" class="danger" type="button" :disabled="busy" @click="confirm">{{ busy ? `${confirmText}中…` : confirmText }}</button>
+        <button type="button" :disabled="busy" @click="close">{{ t('common.cancel') }}</button>
+        <button data-testid="confirm-dialog-action" class="danger" type="button" :disabled="busy" @click="confirm">{{ busy ? t('common.inProgress', { action: confirmText }) : confirmText }}</button>
       </footer>
     </section>
   </div>

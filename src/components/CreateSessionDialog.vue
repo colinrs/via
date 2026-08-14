@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
+import { injectI18n } from '../i18n'
 import type { Group } from '../types/via'
 
 const props = defineProps<{ open: boolean; groups: Group[] }>()
 const emit = defineEmits<{ close: []; create: [groupId: string] }>()
 const selectedGroupId = ref('')
+const { t } = injectI18n()
 
 watch(
   () => props.open,
@@ -17,18 +19,18 @@ watch(
 </script>
 
 <template>
-  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" aria-label="新建会话">
+  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" :aria-label="t('dialog.newSession.title')">
     <section class="dialog">
-      <h2>新建会话</h2>
+      <h2>{{ t('dialog.newSession.title') }}</h2>
       <label>
-        所属分组
-        <select v-model="selectedGroupId" aria-label="所属分组">
+        {{ t('field.group') }}
+        <select v-model="selectedGroupId" :aria-label="t('field.group')">
           <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
         </select>
       </label>
       <footer>
-        <button type="button" @click="emit('close')">取消</button>
-        <button data-testid="create-session-action" class="primary" type="button" @click="emit('create', selectedGroupId)">创建会话</button>
+        <button type="button" @click="emit('close')">{{ t('common.cancel') }}</button>
+        <button data-testid="create-session-action" class="primary" type="button" @click="emit('create', selectedGroupId)">{{ t('action.createSession') }}</button>
       </footer>
     </section>
   </div>

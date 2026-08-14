@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
+import { injectI18n } from '../i18n'
+
 export interface SessionItem {
   id: string
   name: string
@@ -21,6 +23,7 @@ const props = defineProps<{
 
 const expandedGroupIds = ref(new Set<string>())
 const knownGroupIds = new Set<string>()
+const { t } = injectI18n()
 
 watch(() => props.groups.map((group) => group.id), (groupIds) => {
   for (const groupId of groupIds) {
@@ -51,11 +54,11 @@ const emit = defineEmits<{
 <template>
   <aside data-testid="session-sidebar" class="sidebar">
     <button class="primary-button create-session" type="button" @click="emit('create')">
-      <span aria-hidden="true">＋</span> 新建 SSH 会话
+      <span aria-hidden="true">＋</span> {{ t('action.newSshSession') }}
     </button>
-    <button class="create-group" type="button" @click="emit('createGroup')">＋ 新建分组</button>
+    <button class="create-group" type="button" @click="emit('createGroup')"><span aria-hidden="true">＋</span> {{ t('action.newGroup') }}</button>
 
-    <nav class="session-navigation" aria-label="SSH 会话">
+    <nav class="session-navigation" :aria-label="t('sidebar.navigation')">
       <section v-for="group in groups" :key="group.id" class="session-group">
         <div class="group-heading-row">
           <button
@@ -72,8 +75,8 @@ const emit = defineEmits<{
             :data-testid="`delete-group-${group.id}`"
             class="delete-group"
             type="button"
-            :aria-label="`删除分组 ${group.name}`"
-            title="删除分组"
+            :aria-label="t('aria.deleteGroup', { name: group.name })"
+            :title="t('sidebar.deleteGroup')"
             @click.stop="emit('deleteGroup', group.id)"
           >⌫</button>
         </div>
@@ -89,7 +92,7 @@ const emit = defineEmits<{
           >
             <span class="server-icon" aria-hidden="true">▣</span>
             <span class="session-name">{{ session.name }}</span>
-            <span class="session-indicator" :class="session.state" :aria-label="session.state" />
+            <span class="session-indicator" :class="session.state" :aria-label="t(`state.${session.state}`)" />
           </button>
         </div>
       </section>

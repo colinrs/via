@@ -13,10 +13,15 @@ import SecretSetupDialog from './components/SecretSetupDialog.vue'
 import SecretUnlockDialog from './components/SecretUnlockDialog.vue'
 import SessionSidebar, { type SessionGroup } from './components/SessionSidebar.vue'
 import TunnelGrid from './components/TunnelGrid.vue'
+import { createI18n, provideI18n, type I18n } from './i18n'
 import { createViaStore } from './stores/via'
 import type { LocalForwardRule } from './types/via'
 
+const props = defineProps<{ i18n?: I18n }>()
 const store = createViaStore()
+const i18n = props.i18n ?? createI18n(store.preferences.language)
+provideI18n(i18n)
+const { t } = i18n
 const selectedSessionId = ref<string | null>(null)
 const importMode = ref<'import' | 'export' | null>(null)
 const unlockOpen = ref(false)
@@ -78,14 +83,14 @@ const workspaceReady = computed(() => store.initializationState === 'ready'
 const deleteGroupMessage = computed(() => {
   const pending = pendingGroupDeletion.value
   if (!pending) return ''
-  const warning = pending.scopeChanged ? '分组内容已变化，请确认新的删除范围。' : ''
-  return `${warning}将删除此分组下的 ${pending.sessionIds.length} 个会话和 ${pending.ruleIds.length} 条转发规则，此操作不可撤销。`
+  const warning = pending.scopeChanged ? t('dialog.deleteGroup.changed') : ''
+  return `${warning}${t('message.deleteGroupScope', { sessions: pending.sessionIds.length, rules: pending.ruleIds.length })}`
 })
 const backendStatus = computed(() => {
   if (statusError.value) return statusError.value
-  if (store.initializationState === 'connecting') return '正在连接本地后端…'
-  if (store.initializationState === 'failed') return '无法连接本地后端'
-  return 'Rust backend: SQLite local mode'
+  if (store.initializationState === 'connecting') return t('status.backendConnecting')
+  if (store.initializationState === 'failed') return t('status.backendFailed')
+  return t('status.backendReady')
 })
 
 async function saveConfig() {
@@ -93,7 +98,7 @@ async function saveConfig() {
   configurationSaving.value = true
   let succeeded = false
   const operation = configurationSaveTail.then(async () => {
-    try { await store.save(); statusError.value = ''; succeeded = true } catch { statusError.value = '保存失败，请检查会话和规则填写是否完整。' }
+    try { await store.save(); statusError.value = ''; succeeded = true } catch { statusError.value = t('error.saveConfig') }
   })
   configurationSaveTail = operation
   await operation
@@ -139,7 +144,7 @@ async function choosePrivateKey() {
       if (originatingSession?.auth === auth && originatingSession.auth.kind === 'private_key') originatingSession.auth.path = previousPath
     }
   } catch {
-    statusError.value = '选择私钥文件失败，请重试。'
+    statusError.value = t('error.choosePrivateKey')
   } finally {
     authenticationPicking.value = false
   }
@@ -155,7 +160,7 @@ async function saveAuthentication() {
   authenticationSaving.value = true
   try {
     if (!(await saveConfig())) {
-      statusError.value = '保存认证配置失败，请重试。'
+      statusError.value = t('error.saveAuthenticationConfig')
       return
     }
     const persistedSession = store.sessions.find((item) => item.id === sessionId)
@@ -168,13 +173,13 @@ async function saveAuthentication() {
     if (selectedSessionId.value === sessionId && selectedSession.value?.auth.kind === authKind && draft.value === secret) draft.value = ''
     statusError.value = ''
   } catch {
-    statusError.value = '保存认证凭据失败，请重试。'
+    statusError.value = t('error.saveAuthenticationCredentials')
   } finally {
     authenticationSaving.value = false
   }
 }
 async function updateRule(nextRule: LocalForwardRule) { const index = store.rules.findIndex((rule) => rule.id === nextRule.id); if (index >= 0) store.rules.splice(index, 1, nextRule); await persist() }
-async function toggleRule(nextRule: LocalForwardRule) { await updateRule(nextRule); try { if (nextRule.enabled) await store.startRule(nextRule.id); else await store.stopRule(nextRule.id) } catch { statusError.value = '规则操作失败：请先连接 SSH 会话并检查端口。' } }
+async function toggleRule(nextRule: LocalForwardRule) { await updateRule(nextRule); try { if (nextRule.enabled) await store.startRule(nextRule.id); else await store.stopRule(nextRule.id) } catch { statusError.value = t('error.ruleOperation') } }
 async function addRule() { if (!selectedSessionId.value) return; store.rules.push({ id: crypto.randomUUID(), sessionId: selectedSessionId.value, enabled: false, localPort: 1, targetHost: 'localhost', targetPort: 1, note: '', runtimeState: 'stopped' }); await persist() }
 async function cloneRule(id: string) { const source = store.rules.find((rule) => rule.id === id); if (source) { store.rules.push({ ...source, id: crypto.randomUUID(), localPort: 1, runtimeState: 'stopped', enabled: false }); await persist() } }
 function requestRemoveRule(id: string) { pendingRuleId.value = id }
@@ -197,7 +202,7 @@ async function removeRule() {
     await store.reloadConfig().catch(() => undefined)
     if (!store.rules.some((item) => item.id === id)) pendingRuleId.value = null
     if (!store.sessions.some((session) => session.id === selectedSessionId.value)) selectedSessionId.value = store.sessions[0]?.id ?? null
-    statusError.value = '删除规则失败，请重试。'
+    statusError.value = t('error.deleteRule')
   } finally {
     ruleDeletionBusy.value = false
   }
@@ -209,8 +214,8 @@ function hostTrustRequest(error: unknown) {
   const match = /HostTrustRequired \{ host: "([^"]+)", port: (\d+), algorithm: "([^"]+)", fingerprint: "([^"]+)" \}/.exec(value)
   return match ? { host: match[1], port: Number(match[2]), algorithm: match[3], fingerprint: match[4] } : null
 }
-async function connect() { if (!selectedSessionId.value) return; try { await store.connectSession(selectedSessionId.value); await startAll() } catch (error) { hostTrust.value = hostTrustRequest(error); const value = String(error); statusError.value = hostTrust.value ? '' : value.includes('HostKeyChanged') ? '主机密钥已变化，连接已阻断。请核对旧/新 SHA-256 指纹后更新受信任主机。' : '连接失败：请解锁凭据或检查主机指纹与网络。' } }
-async function approveHostTrust() { if (!hostTrust.value) return; const request = hostTrust.value; try { await store.approveHostKey(request.host, request.port, request.algorithm, request.fingerprint); hostTrust.value = null; await connect() } catch { statusError.value = '无法保存主机信任记录。' } }
+async function connect() { if (!selectedSessionId.value) return; try { await store.connectSession(selectedSessionId.value); await startAll() } catch (error) { hostTrust.value = hostTrustRequest(error); const value = String(error); statusError.value = hostTrust.value ? '' : value.includes('HostKeyChanged') ? t('error.hostKeyChanged') : t('error.connect') } }
+async function approveHostTrust() { if (!hostTrust.value) return; const request = hostTrust.value; try { await store.approveHostKey(request.host, request.port, request.algorithm, request.fingerprint); hostTrust.value = null; await connect() } catch { statusError.value = t('error.saveHostTrust') } }
 async function disconnect() { if (selectedSessionId.value) await store.disconnectSession(selectedSessionId.value) }
 async function initializeSecrets(password: string) {
   if (secretOperationBusy.value || !setupOpen.value || recoveryCodes.value.length > 0) return
@@ -221,7 +226,7 @@ async function initializeSecrets(password: string) {
     recoveryCodesAcknowledged.value = false
     statusError.value = ''
   } catch {
-    statusError.value = '初始化本地凭据失败，请重试。'
+    statusError.value = t('error.initializeCredentials')
   } finally {
     credentialOperationMayProduceCodes.value = false
     secretOperationBusy.value = false
@@ -239,7 +244,7 @@ async function unlock(password: string) {
     recoveryCodesAcknowledged.value = false
     statusError.value = ''
   } catch {
-    statusError.value = '主密码不正确，无法解锁本地凭据。'
+    statusError.value = t('error.unlockCredentials')
   } finally {
     credentialOperationMayProduceCodes.value = false
     secretOperationBusy.value = false
@@ -257,7 +262,7 @@ async function recover(code: string, password: string) {
     recoveryCodesAcknowledged.value = false
     statusError.value = ''
   } catch {
-    statusError.value = '恢复本地凭据失败，请检查恢复码后重试。'
+    statusError.value = t('error.recoverCredentials')
   } finally {
     credentialOperationMayProduceCodes.value = false
     secretOperationBusy.value = false
@@ -287,11 +292,11 @@ function warnBeforeClosingWithCodes(event: BeforeUnloadEvent) {
   event.preventDefault()
   event.returnValue = ''
 }
-async function openTransfer(mode: 'import' | 'export') { try { exportedJson.value = mode === 'export' ? await store.exportConfig() : ''; importMode.value = mode } catch { statusError.value = '无法读取配置。' } }
-async function transfer(json: string, replaceAll: boolean) { try { if (importMode.value === 'export') await navigator.clipboard.writeText(json); else { await store.importConfig(json, replaceAll); selectedSessionId.value = store.sessions[0]?.id ?? null }; importMode.value = null } catch { statusError.value = '配置处理失败，请确认 JSON 内容和字段。' } }
+async function openTransfer(mode: 'import' | 'export') { try { exportedJson.value = mode === 'export' ? await store.exportConfig() : ''; importMode.value = mode } catch { statusError.value = t('error.readConfig') } }
+async function transfer(json: string, replaceAll: boolean) { try { if (importMode.value === 'export') await navigator.clipboard.writeText(json); else { await store.importConfig(json, replaceAll); selectedSessionId.value = store.sessions[0]?.id ?? null }; importMode.value = null } catch { statusError.value = t('error.processConfig') } }
 function requestCreateSession() { if (store.groups.length) createSessionOpen.value = true; else void addSession() }
-async function addSession(groupId?: string) { const group = store.groups.find((item) => item.id === groupId) ?? store.groups[0] ?? { id: crypto.randomUUID(), name: '默认分组' }; if (!store.groups.length) store.groups.push(group); const id = crypto.randomUUID(); store.sessions.push({ id, groupId: group.id, name: '未命名 SSH 会话', host: 'localhost', port: 22, user: 'root', auth: { kind: 'password', secretId: null } }); selectedSessionId.value = id; createSessionOpen.value = false; await persist() }
-async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false; statusError.value = '' } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); statusError.value = '创建分组失败，请重试。' } }
+async function addSession(groupId?: string) { const group = store.groups.find((item) => item.id === groupId) ?? store.groups[0] ?? { id: crypto.randomUUID(), name: t('message.defaultGroup') }; if (!store.groups.length) store.groups.push(group); const id = crypto.randomUUID(); store.sessions.push({ id, groupId: group.id, name: t('message.unnamedSession'), host: 'localhost', port: 22, user: 'root', auth: { kind: 'password', secretId: null } }); selectedSessionId.value = id; createSessionOpen.value = false; await persist() }
+async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false; statusError.value = '' } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); statusError.value = t('error.createGroup') } }
 function groupDeletionSignature(id: string): GroupDeletionScope {
   const sessionIds = store.sessions
     .filter((session) => session.groupId === id)
@@ -358,7 +363,7 @@ async function removeGroup(generation: number) {
     await store.reloadConfig().catch(() => undefined)
     if (!store.groups.some((group) => group.id === pending.id)) pendingGroupDeletion.value = null
     if (!store.sessions.some((session) => session.id === selectedSessionId.value)) selectedSessionId.value = store.sessions[0]?.id ?? null
-    statusError.value = '删除分组失败，请重试。'
+    statusError.value = t('error.deleteGroup')
   } finally {
     groupDeletionBusy.value = false
   }
@@ -386,7 +391,7 @@ async function removeSession() {
     store.sessions.splice(0, store.sessions.length, ...previousSessions)
     store.rules.splice(0, store.rules.length, ...previousRules)
     selectedSessionId.value = id
-    statusError.value = '删除会话失败，请重试。'
+    statusError.value = t('error.deleteSession')
   } finally {
     sessionDeletionBusy.value = false
   }
@@ -407,48 +412,48 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeClosi
   <main data-testid="via-app" class="via-app">
     <fieldset data-testid="app-interactions" class="app-interactions" :disabled="authenticationBusy || secretOperationBusy">
     <header class="titlebar">
-      <div class="brand"><span class="mark">V</span><span>Via</span><span class="version">V1 MVP</span></div>
-      <div v-if="workspaceReady" class="title-actions"><button type="button" @click="openTransfer('import')">⇩ 导入配置</button><button type="button" @click="openTransfer('export')">⇧ 导出配置</button><button type="button" @click="openUnlock">⌁ 解锁凭据</button></div>
+      <div class="brand"><span class="mark">V</span><span>Via</span><span class="version">{{ t('app.mvpVersion') }}</span></div>
+      <div v-if="workspaceReady" class="title-actions"><button type="button" @click="openTransfer('import')">{{ t('action.importConfig') }}</button><button type="button" @click="openTransfer('export')">{{ t('action.exportConfig') }}</button><button type="button" @click="openUnlock">{{ t('action.unlockCredentials') }}</button></div>
     </header>
     <div v-if="workspaceReady" class="workspace">
       <SessionSidebar :groups="groups" :selected-session-id="selectedSessionId ?? ''" @select="selectedSessionId = $event" @create="requestCreateSession" @create-group="createGroupOpen=true" @delete-group="requestRemoveGroup" />
       <section v-if="selectedSession" class="content">
         <header class="session-header">
-          <div><p class="section-label">SSH 会话</p><h1>{{ selectedSession.name }}</h1><p class="connection"><span class="live-dot" />{{ selectedSession.user }}@{{ selectedSession.host || '未配置主机' }}:{{ selectedSession.port }}</p></div>
-          <div class="header-actions"><button class="success-button" type="button" @click="connect">连接并启动</button><button class="danger-button" type="button" @click="disconnect">断开连接</button><button class="secondary-button" type="button" @click="startAll">↻ 重连隧道</button><button class="danger-button" type="button" @click="requestRemoveSession">删除会话</button></div>
+          <div><p class="section-label">{{ t('title.session') }}</p><h1>{{ selectedSession.name }}</h1><p class="connection"><span class="live-dot" />{{ selectedSession.user }}@{{ selectedSession.host || t('message.unconfiguredHost') }}:{{ selectedSession.port }}</p></div>
+          <div class="header-actions"><button class="success-button" type="button" @click="connect">{{ t('action.connectAndStart') }}</button><button class="danger-button" type="button" @click="disconnect">{{ t('action.disconnect') }}</button><button class="secondary-button" type="button" @click="startAll">{{ t('action.reconnectTunnels') }}</button><button class="danger-button" type="button" @click="requestRemoveSession">{{ t('action.deleteSession') }}</button></div>
         </header>
         <TunnelGrid :rules="currentRules" @add="addRule" @update="updateRule" @toggle="toggleRule" @remove="requestRemoveRule" @clone="cloneRule" @start-all="startAll" @stop-all="stopAll" />
         <section class="session-editor">
-          <div class="editor-title">▤ 当前主机会话配置</div>
+          <div class="editor-title"><span aria-hidden="true">▤</span> {{ t('title.currentSessionConfig') }}</div>
           <div class="editor-fields">
-            <label>会话名称<input v-model="selectedSession.name" @change="persist" /></label>
-            <label>主机地址<input v-model="selectedSession.host" @change="persist" /></label>
-            <label>SSH 端口<input v-model.number="selectedSession.port" type="number" @change="persist" /></label>
-            <label>登录用户名<input v-model="selectedSession.user" @change="persist" /></label>
-            <label>认证方式<select :value="selectedSession.auth.kind" aria-label="认证方式" :disabled="authenticationControlsBusy" @change="changeAuthenticationKind"><option value="password">密码</option><option value="private_key">私钥</option></select></label>
+            <label>{{ t('field.sessionName') }}<input v-model="selectedSession.name" :aria-label="t('field.sessionName')" @change="persist" /></label>
+            <label>{{ t('field.hostAddress') }}<input v-model="selectedSession.host" :aria-label="t('field.hostAddress')" @change="persist" /></label>
+            <label>{{ t('field.sshPort') }}<input v-model.number="selectedSession.port" type="number" :aria-label="t('field.sshPort')" @change="persist" /></label>
+            <label>{{ t('field.loginUser') }}<input v-model="selectedSession.user" :aria-label="t('field.loginUser')" @change="persist" /></label>
+            <label>{{ t('field.authentication') }}<select :value="selectedSession.auth.kind" :aria-label="t('field.authentication')" :disabled="authenticationControlsBusy" @change="changeAuthenticationKind"><option value="password">{{ t('field.password') }}</option><option value="private_key">{{ t('field.privateKey') }}</option></select></label>
             <template v-if="selectedSession.auth.kind === 'password'">
-              <label class="authentication-field">SSH 密码<input v-model="passwordDraft" aria-label="SSH 密码" type="password" autocomplete="new-password" /></label>
+              <label class="authentication-field">{{ t('field.sshPassword') }}<input v-model="passwordDraft" :aria-label="t('field.sshPassword')" type="password" autocomplete="new-password" /></label>
             </template>
             <template v-else>
-              <label class="authentication-field">私钥文件<input :value="selectedSession.auth.path" aria-label="私钥文件" readonly /></label>
-              <button data-testid="choose-private-key" class="secondary-button" type="button" :disabled="authenticationControlsBusy" @click="choosePrivateKey">选择私钥</button>
-              <label class="authentication-field">私钥口令（可选）<input v-model="passphraseDraft" aria-label="私钥口令" type="password" autocomplete="new-password" /></label>
+              <label class="authentication-field">{{ t('field.privateKeyFile') }}<input :value="selectedSession.auth.path" :aria-label="t('field.privateKeyFile')" readonly /></label>
+              <button data-testid="choose-private-key" class="secondary-button" type="button" :disabled="authenticationControlsBusy" @click="choosePrivateKey">{{ t('action.choosePrivateKey') }}</button>
+              <label class="authentication-field">{{ t('field.privateKeyPassphrase') }}<input v-model="passphraseDraft" :aria-label="t('field.privateKeyPassphrase')" type="password" autocomplete="new-password" /></label>
             </template>
-            <button data-testid="save-authentication" class="primary-button" type="button" :disabled="authenticationControlsBusy" @click="saveAuthentication">保存认证信息</button>
+            <button data-testid="save-authentication" class="primary-button" type="button" :disabled="authenticationControlsBusy" @click="saveAuthentication">{{ t('action.saveAuthentication') }}</button>
           </div>
         </section>
       </section>
       <EmptyWorkspace v-else @create="requestCreateSession" />
     </div>
-    <footer class="statusbar"><span><i class="live-dot" />{{ backendStatus }}</span><span>隧道：{{ activeCount }} 运行中 / {{ errorCount }} 异常</span></footer>
+    <footer class="statusbar"><span><i class="live-dot" />{{ backendStatus }}</span><span>{{ t('status.tunnels', { active: activeCount, errors: errorCount }) }}</span></footer>
     <ImportDialog :open="importMode!==null" :mode="importMode ?? 'import'" :export-json="exportedJson" @close="importMode=null" @confirm="transfer" />
     <SecretSetupDialog :open="setupOpen" @setup="initializeSecrets" />
     <SecretUnlockDialog :open="unlockOpen" @close="closeUnlock" @unlock="unlock" @recover="recover" @mode-change="changeUnlockMode" />
     <RecoveryCodesDialog :open="recoveryCodes.length > 0" :codes="recoveryCodes" @acknowledge="acknowledgeRecoveryCodes" />
     <HostTrustDialog :open="hostTrust!==null" :host="hostTrust?.host ?? ''" :port="hostTrust?.port ?? 22" :algorithm="hostTrust?.algorithm ?? ''" :fingerprint="hostTrust?.fingerprint ?? ''" @close="hostTrust=null" @approve="approveHostTrust" />
-    <ConfirmDialog :open="deleteSessionOpen" :busy="sessionDeletionBusy" title="删除 SSH 会话" message="将删除此会话及其全部 Local 转发规则，此操作不可撤销。" confirm-text="删除会话" @close="closeSessionDeletion" @confirm="removeSession" />
-    <ConfirmDialog :open="pendingRuleId!==null" :busy="ruleDeletionBusy" title="删除转发规则" message="将永久删除此转发规则，此操作不可撤销。" confirm-text="删除规则" @close="closeRuleDeletion" @confirm="removeRule" />
-    <ConfirmDialog :key="pendingGroupDeletion?.generation ?? 0" :generation="pendingGroupDeletion?.generation ?? 0" :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" title="删除分组" :message="deleteGroupMessage" confirm-text="删除分组" @close="closeGroupDeletion" @confirm="removeGroup" @ready="armGroupDeletionConfirmation" />
+    <ConfirmDialog :open="deleteSessionOpen" :busy="sessionDeletionBusy" :title="t('dialog.deleteSession.title')" :message="t('dialog.deleteSession.message')" :confirm-text="t('action.deleteSession')" @close="closeSessionDeletion" @confirm="removeSession" />
+    <ConfirmDialog :open="pendingRuleId!==null" :busy="ruleDeletionBusy" :title="t('dialog.deleteRule.title')" :message="t('dialog.deleteRule.message')" :confirm-text="t('action.deleteRule')" @close="closeRuleDeletion" @confirm="removeRule" />
+    <ConfirmDialog :key="pendingGroupDeletion?.generation ?? 0" :generation="pendingGroupDeletion?.generation ?? 0" :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" :title="t('dialog.deleteGroup.title')" :message="deleteGroupMessage" :confirm-text="t('sidebar.deleteGroup')" @close="closeGroupDeletion" @confirm="removeGroup" @ready="armGroupDeletionConfirmation" />
     <CreateGroupDialog :open="createGroupOpen" @close="createGroupOpen=false" @create="createGroup" />
     <CreateSessionDialog :open="createSessionOpen" :groups="store.groups" @close="createSessionOpen=false" @create="addSession" />
     </fieldset>

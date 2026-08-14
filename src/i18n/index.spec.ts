@@ -1,7 +1,9 @@
+import { mount } from '@vue/test-utils'
+import { defineComponent, h } from 'vue'
 import { describe, expect, it } from 'vitest'
 
 import { catalogs, translationKeys } from './catalog'
-import { createI18n, resolveSystemLanguage } from '.'
+import { createI18n, injectI18n, provideI18n, resolveSystemLanguage } from '.'
 
 if (false) {
   const { t } = createI18n('en')
@@ -82,5 +84,31 @@ describe('i18n', () => {
     expect(chinese.t('aria.recoveryCodesAcknowledged')).toBe('我已保存恢复码')
     expect(english.t('action.newSshSession')).toBe('New SSH session')
     expect(chinese.t('action.newSshSession')).toBe('新建 SSH 会话')
+  })
+
+  it('shares an explicitly provided instance with descendants and isolates standalone fallbacks', async () => {
+    const Message = defineComponent({
+      setup() {
+        const i18n = injectI18n()
+        return () => h('span', i18n.t('settings.title'))
+      },
+    })
+    const provided = createI18n('zh-CN')
+    const Provider = defineComponent({
+      setup() {
+        provideI18n(provided)
+        return () => h(Message)
+      },
+    })
+
+    const nested = mount(Provider)
+    const standalone = mount(Message)
+    expect(nested.text()).toBe('设置')
+    expect(standalone.text()).toBe('Settings')
+
+    provided.setLanguage('en')
+    await nested.vm.$nextTick()
+    expect(nested.text()).toBe('Settings')
+    expect(standalone.text()).toBe('Settings')
   })
 })

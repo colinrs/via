@@ -13,3 +13,10 @@
 - Root theme application now sets `color: var(--text)` and `background-color: var(--canvas)` alongside token updates, so unstyled inherited text and canvas colors switch correctly in light mode.
 - Added explicit-theme zero-listener assertions and legacy `addListener`/`removeListener` live-update, idempotent-cleanup coverage.
 - Verification: focused tests (9), full `npm test` (122), `npm run typecheck`, `npm run build`, and `git diff --check` passed.
+
+## Review fix round 2
+
+- Re-inventoried the current UI literals and added semantically exact Create Group/Create Session title and confirmation-action keys, the Recovery Codes checkbox aria label, and text-only New SSH Session/New Group labels. Icons remain presentation-only for the later template migration.
+- Added catalog assertions for those exact English and Simplified Chinese strings.
+- Strengthened interpolation typing with an `Exact` parameter constraint. Extra keys are rejected for both object literals and variables while JavaScript callers safely ignore unknown values at runtime.
+- Verification: focused i18n tests (6), full `npm test` (123), `npm run typecheck`, `npm run build`, and `git diff --check` passed.

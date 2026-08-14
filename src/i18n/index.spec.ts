@@ -11,6 +11,9 @@ if (false) {
   t('settings.title', {})
   // @ts-expect-error object literals cannot add unknown interpolation keys
   t('status.tunnels', { active: 1, errors: 0, extra: 2 })
+  const statusWithExtra = { active: 1, errors: 0, extra: 2 }
+  // @ts-expect-error variables cannot supply extra interpolation keys either
+  t('status.tunnels', statusWithExtra)
 }
 
 describe('i18n', () => {
@@ -63,5 +66,21 @@ describe('i18n', () => {
     ]))
     expect(createI18n('en').t('aria.deleteGroup', { name: 'Production' })).toBe('Delete group Production')
     expect(createI18n('zh-CN').t('aria.deleteGroup', { name: '生产环境' })).toBe('删除分组 生产环境')
+  })
+
+  it('uses exact catalog entries for create and recovery-code controls', () => {
+    const english = createI18n('en')
+    const chinese = createI18n('zh-CN')
+
+    expect(english.t('dialog.createGroup.title')).toBe('Create group')
+    expect(chinese.t('dialog.createGroup.title')).toBe('新建分组')
+    expect(english.t('action.createGroup')).toBe('Create group')
+    expect(chinese.t('action.createGroup')).toBe('创建分组')
+    expect(english.t('dialog.createSession.title')).toBe('Create session')
+    expect(chinese.t('action.createSession')).toBe('创建会话')
+    expect(english.t('aria.recoveryCodesAcknowledged')).toBe('I saved the recovery codes')
+    expect(chinese.t('aria.recoveryCodesAcknowledged')).toBe('我已保存恢复码')
+    expect(english.t('action.newSshSession')).toBe('New SSH session')
+    expect(chinese.t('action.newSshSession')).toBe('新建 SSH 会话')
   })
 })

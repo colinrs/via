@@ -17,10 +17,16 @@ use zeroize::Zeroizing;
 
 use crate::ViaError;
 
+#[cfg(test)]
+use std::sync::{Arc, Barrier};
+
 const LEGACY_VERIFIER: &[u8] = b"via-secret-store-v1";
 const VERIFIER: &[u8] = b"via-secret-store-v2";
 const CURRENT_VERSION: i64 = 2;
 const RECOVERY_CODE_COUNT: usize = 10;
+
+#[cfg(test)]
+static CHANGE_MASTER_PASSWORD_CHECKPOINT: Mutex<Option<Arc<(Barrier, Barrier)>>> = Mutex::new(None);
 
 pub struct SecretStore {
     path: PathBuf,
@@ -220,6 +226,12 @@ impl SecretStore {
             }
         }
 
+        #[cfg(test)]
+        if let Some(checkpoint) = CHANGE_MASTER_PASSWORD_CHECKPOINT.lock().unwrap().clone() {
+            checkpoint.0.wait();
+            checkpoint.1.wait();
+        }
+
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -232,9 +244,9 @@ impl SecretStore {
         let (salt, verifier, wrapped_data_key) =
             master_password_records(new_master_password, &data_key)?;
         update_metadata(&transaction, &salt, &verifier, &wrapped_data_key)?;
+        let mut state = self.state.lock().map_err(lock_error)?;
         transaction.commit().map_err(database_error)?;
 
-        let mut state = self.state.lock().map_err(lock_error)?;
         if state.key.is_some() {
             state.key = Some(data_key);
         }
@@ -253,22 +265,25 @@ impl SecretStore {
             return Err(ViaError::InvalidSecret);
         }
         let id = Uuid::new_v4();
-        let mut state = self.state.lock().map_err(lock_error)?;
-        if let Some(key) = state.key.as_ref() {
-            let encrypted = encrypt(key, value.as_bytes())?;
-            self.connection()?
-                .execute(
-                    "INSERT INTO encrypted_secrets (id, nonce, ciphertext) VALUES (?1, ?2, ?3)",
-                    params![
-                        id.to_string(),
-                        encrypted.nonce.as_slice(),
-                        encrypted.ciphertext
-                    ],
-                )
-                .map_err(database_error)?;
-        } else {
-            state.ephemeral.insert(id, value);
-        }
+        let key = {
+            let mut state = self.state.lock().map_err(lock_error)?;
+            let Some(key) = state.key.as_ref() else {
+                state.ephemeral.insert(id, value);
+                return Ok(id);
+            };
+            key.clone()
+        };
+        let encrypted = encrypt(&key, value.as_bytes())?;
+        self.connection()?
+            .execute(
+                "INSERT INTO encrypted_secrets (id, nonce, ciphertext) VALUES (?1, ?2, ?3)",
+                params![
+                    id.to_string(),
+                    encrypted.nonce.as_slice(),
+                    encrypted.ciphertext
+                ],
+            )
+            .map_err(database_error)?;
         Ok(id)
     }
 
@@ -307,11 +322,17 @@ impl SecretStore {
     }
 
     pub fn get(&self, id: Uuid) -> Result<String, ViaError> {
-        let state = self.state.lock().map_err(lock_error)?;
-        if let Some(value) = state.ephemeral.get(&id) {
-            return Ok(value.clone());
-        }
-        let key = state.key.as_ref().ok_or(ViaError::SecretStoreLocked)?;
+        let key = {
+            let state = self.state.lock().map_err(lock_error)?;
+            if let Some(value) = state.ephemeral.get(&id) {
+                return Ok(value.clone());
+            }
+            state
+                .key
+                .as_ref()
+                .cloned()
+                .ok_or(ViaError::SecretStoreLocked)?
+        };
         let encrypted = self
             .connection()?
             .query_row(
@@ -328,7 +349,7 @@ impl SecretStore {
             .optional()
             .map_err(database_error)?
             .ok_or(ViaError::SecretStoreLocked)?;
-        let plaintext = decrypt(key, &encrypted)
+        let plaintext = decrypt(&key, &encrypted)
             .map_err(|_| ViaError::Storage("encrypted secret authentication failed".into()))?;
         String::from_utf8(plaintext).map_err(|error| ViaError::Storage(error.to_string()))
     }
@@ -822,4 +843,64 @@ fn random_array<const N: usize>() -> Result<[u8; N], ViaError> {
     getrandom::fill(&mut bytes)
         .map_err(|_| ViaError::Storage("operating system randomness is unavailable".into()))?;
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    fn metadata_snapshot(path: &Path) -> (i64, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
+        Connection::open(path)
+            .unwrap()
+            .query_row(
+                "SELECT version, salt, verifier_nonce, verifier_ciphertext,
+                        wrapped_data_key_nonce, wrapped_data_key_ciphertext
+                 FROM secret_store_metadata WHERE id = 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn poisoned_state_before_commit_leaves_master_password_metadata_unchanged() {
+        let path = std::env::temp_dir().join(format!(
+            "via-secret-store-poisoned-change-{}.db",
+            Uuid::new_v4()
+        ));
+        let store = Arc::new(SecretStore::new(path));
+        store.initialize("old password").unwrap();
+        let snapshot = metadata_snapshot(store.path());
+        let checkpoint = Arc::new((Barrier::new(2), Barrier::new(2)));
+        *CHANGE_MASTER_PASSWORD_CHECKPOINT.lock().unwrap() = Some(Arc::clone(&checkpoint));
+
+        let changing_store = Arc::clone(&store);
+        let change = std::thread::spawn(move || {
+            changing_store.change_master_password("old password", "new password")
+        });
+        checkpoint.0.wait();
+        let poisoning_store = Arc::clone(&store);
+        assert!(
+            catch_unwind(AssertUnwindSafe(move || {
+                let _state = poisoning_store.state.lock().unwrap();
+                panic!("poison secret-store state for rollback regression");
+            }))
+            .is_err()
+        );
+        checkpoint.1.wait();
+
+        assert!(change.join().unwrap().is_err());
+        *CHANGE_MASTER_PASSWORD_CHECKPOINT.lock().unwrap() = None;
+        assert_eq!(metadata_snapshot(store.path()), snapshot);
+    }
 }

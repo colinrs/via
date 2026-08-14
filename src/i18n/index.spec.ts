@@ -49,6 +49,7 @@ describe('i18n', () => {
     expect(chinese.t('message.deleteGroupScope', { sessions: 2, rules: 3 })).toBe('将删除此分组下的 2 个会话和 3 条转发规则，此操作不可撤销。')
     expect(english.t('status.tunnels', { active: 4, errors: 1 })).toBe('Tunnels: 4 running / 1 issues')
     expect(chinese.t('status.tunnels', { active: 4, errors: 1 })).toBe('隧道：4 运行中 / 1 异常')
+    expect(chinese.t('status.backendReady')).toBe('Rust 后端：SQLite 本地模式')
   })
 
   it('provides every key in both language catalogs', () => {

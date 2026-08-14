@@ -158,6 +158,7 @@ describe('App', () => {
 
     expect(document.documentElement.lang).toBe('en')
     expect(document.documentElement.dataset.fontSize).toBe('large')
+    expect(document.documentElement.style.zoom).toBe('1.125')
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(wrapper.get('[aria-label="Settings"]').text()).toContain('Settings')
     expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()

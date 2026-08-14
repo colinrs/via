@@ -39,7 +39,8 @@ export function applyDocumentPreferences(
   root.lang = resolveSystemLanguage(preferences.language, window.navigator?.language)
   root.dataset.fontSize = preferences.fontSize
   root.style.setProperty('--app-font-scale', fontScales[preferences.fontSize])
-  root.style.fontSize = 'calc(16px * var(--app-font-scale))'
+  root.style.removeProperty('font-size')
+  root.style.setProperty('zoom', fontScales[preferences.fontSize])
 
   const media = window.matchMedia?.('(prefers-color-scheme: dark)')
   const applyCurrentTheme = (systemDark = media?.matches ?? false) => {

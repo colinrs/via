@@ -61,6 +61,8 @@ describe('applyDocumentPreferences', () => {
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(document.documentElement.dataset.fontSize).toBe('large')
     expect(document.documentElement.style.getPropertyValue('--app-font-scale')).toBe('1.125')
+    expect(document.documentElement.style.zoom).toBe('1.125')
+    expect(document.documentElement.style.fontSize).toBe('')
     expect(document.documentElement.style.getPropertyValue('--canvas')).toBe('#0d1117')
 
     darkMedia.dispatch(false)
@@ -95,6 +97,7 @@ describe('applyDocumentPreferences', () => {
     expect(document.documentElement.lang).toBe('en')
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(document.documentElement.style.getPropertyValue('--app-font-scale')).toBe('.875')
+    expect(document.documentElement.style.zoom).toBe('0.875')
     expect(registrations).toBe(0)
     cleanup()
   })
@@ -112,6 +115,7 @@ describe('applyDocumentPreferences', () => {
     )
 
     expect(document.documentElement.dataset.theme).toBe('light')
+    expect(document.documentElement.style.zoom).toBe('1')
     expect(registrations).toBe(0)
   })
 

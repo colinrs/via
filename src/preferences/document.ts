@@ -26,6 +26,8 @@ const fontScales: Record<AppPreferences['fontSize'], string> = { small: '.875', 
 function applyTheme(root: HTMLElement, theme: ResolvedTheme) {
   root.dataset.theme = theme
   for (const [name, value] of Object.entries(themes[theme])) root.style.setProperty(name, value)
+  root.style.color = 'var(--text)'
+  root.style.backgroundColor = 'var(--canvas)'
 }
 
 export function applyDocumentPreferences(

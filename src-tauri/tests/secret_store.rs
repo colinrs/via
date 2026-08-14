@@ -4,9 +4,195 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit},
 };
 use rusqlite::{Connection, params};
-use std::sync::{Arc, Barrier};
+use std::{
+    sync::{Arc, Barrier, mpsc},
+    time::Duration,
+};
 use uuid::Uuid;
 use via::{SecretStore, ViaError};
+
+#[test]
+fn changing_master_password_preserves_secrets_and_recovery_codes() {
+    let store = SecretStore::new(temp_secret_path());
+    let recovery_code = store.initialize("old password").unwrap().remove(0);
+    let secret_id = store.put("ssh-password").unwrap();
+    let recovery_rows_before = recovery_rows(store.path());
+    let secret_rows_before = encrypted_secret_rows(store.path());
+
+    store
+        .change_master_password("old password", "new password")
+        .unwrap();
+
+    assert_eq!(store.get(secret_id).unwrap(), "ssh-password");
+    assert_eq!(recovery_rows(store.path()), recovery_rows_before);
+    assert_eq!(encrypted_secret_rows(store.path()), secret_rows_before);
+    store.lock();
+    assert!(store.unlock("old password").is_err());
+    store.unlock("new password").unwrap();
+    assert_eq!(store.get(secret_id).unwrap(), "ssh-password");
+    assert!(store.recover(&recovery_code, "recovered password").is_ok());
+}
+
+#[test]
+fn wrong_current_master_password_leaves_every_persisted_record_unchanged() {
+    let store = SecretStore::new(temp_secret_path());
+    store.initialize("old password").unwrap();
+    let secret_id = store.put("ssh-password").unwrap();
+    let snapshot = vault_rows(store.path());
+
+    assert_eq!(
+        store.change_master_password("wrong password", "new password"),
+        Err(ViaError::InvalidMasterPassword)
+    );
+
+    assert_eq!(vault_rows(store.path()), snapshot);
+    assert_eq!(store.get(secret_id).unwrap(), "ssh-password");
+    store.lock();
+    store.unlock("old password").unwrap();
+}
+
+#[test]
+fn changing_master_password_requires_the_vault_to_be_currently_unlocked() {
+    let store = SecretStore::new(temp_secret_path());
+    store.initialize("old password").unwrap();
+    store.put("ssh-password").unwrap();
+    store.lock();
+    let snapshot = vault_rows(store.path());
+
+    assert_eq!(
+        store.change_master_password("old password", "new password"),
+        Err(ViaError::SecretStoreLocked)
+    );
+
+    assert_eq!(vault_rows(store.path()), snapshot);
+    store.unlock("old password").unwrap();
+}
+
+#[test]
+fn change_reverifies_current_password_against_persisted_metadata() {
+    let path = temp_secret_path();
+    let stale_store = SecretStore::new(path.clone());
+    stale_store.initialize("old password").unwrap();
+    let secret_id = stale_store.put("ssh-password").unwrap();
+    let current_store = SecretStore::new(path.clone());
+    current_store.unlock("old password").unwrap();
+    current_store
+        .change_master_password("old password", "current password")
+        .unwrap();
+    let snapshot = vault_rows(&path);
+
+    assert_eq!(
+        stale_store.change_master_password("old password", "attacker password"),
+        Err(ViaError::InvalidMasterPassword)
+    );
+
+    assert_eq!(vault_rows(&path), snapshot);
+    stale_store.lock();
+    stale_store.unlock("current password").unwrap();
+    assert_eq!(stale_store.get(secret_id).unwrap(), "ssh-password");
+}
+
+#[test]
+fn unsupported_metadata_version_fails_without_migration_or_record_changes() {
+    let store = SecretStore::new(temp_secret_path());
+    store.initialize("old password").unwrap();
+    store.put("ssh-password").unwrap();
+    Connection::open(store.path())
+        .unwrap()
+        .execute(
+            "UPDATE secret_store_metadata SET version = 99 WHERE id = 1",
+            [],
+        )
+        .unwrap();
+    let snapshot = vault_rows(store.path());
+
+    assert!(
+        store
+            .change_master_password("old password", "new password")
+            .is_err()
+    );
+
+    assert_eq!(vault_rows(store.path()), snapshot);
+}
+
+#[test]
+fn metadata_write_failure_rolls_back_without_changing_memory_or_records() {
+    let store = SecretStore::new(temp_secret_path());
+    store.initialize("old password").unwrap();
+    let secret_id = store.put("ssh-password").unwrap();
+    Connection::open(store.path())
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER reject_master_password_change
+             BEFORE UPDATE ON secret_store_metadata
+             BEGIN
+               SELECT RAISE(ABORT, 'metadata update rejected');
+             END;",
+        )
+        .unwrap();
+    let snapshot = vault_rows(store.path());
+
+    assert!(
+        store
+            .change_master_password("old password", "new password")
+            .is_err()
+    );
+
+    assert_eq!(vault_rows(store.path()), snapshot);
+    assert_eq!(store.get(secret_id).unwrap(), "ssh-password");
+    Connection::open(store.path())
+        .unwrap()
+        .execute("DROP TRIGGER reject_master_password_change", [])
+        .unwrap();
+    store.lock();
+    store.unlock("old password").unwrap();
+}
+
+#[test]
+fn blank_password_change_inputs_do_not_modify_the_vault() {
+    let store = SecretStore::new(temp_secret_path());
+    store.initialize("old password").unwrap();
+    let snapshot = vault_rows(store.path());
+
+    assert_eq!(
+        store.change_master_password(" ", "new password"),
+        Err(ViaError::InvalidMasterPassword)
+    );
+    assert_eq!(
+        store.change_master_password("old password", "\t"),
+        Err(ViaError::InvalidMasterPassword)
+    );
+
+    assert_eq!(vault_rows(store.path()), snapshot);
+}
+
+#[test]
+fn password_change_waiting_for_sqlite_does_not_block_secret_reads() {
+    let path = temp_secret_path();
+    let store = Arc::new(SecretStore::new(path.clone()));
+    store.initialize("old password").unwrap();
+    let secret_id = store.put("ssh-password").unwrap();
+    let blocker = Connection::open(&path).unwrap();
+    blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+    let changing_store = Arc::clone(&store);
+    let change = std::thread::spawn(move || {
+        changing_store.change_master_password("old password", "new password")
+    });
+    std::thread::sleep(Duration::from_millis(100));
+    let reading_store = Arc::clone(&store);
+    let (read_sender, read_receiver) = mpsc::channel();
+    let read = std::thread::spawn(move || {
+        read_sender.send(reading_store.get(secret_id)).unwrap();
+    });
+
+    let read_result = read_receiver.recv_timeout(Duration::from_secs(1));
+    blocker.execute_batch("COMMIT").unwrap();
+    change.join().unwrap().unwrap();
+    read.join().unwrap();
+
+    assert_eq!(read_result.unwrap().unwrap(), "ssh-password");
+}
 
 #[test]
 fn blank_secret_is_rejected_without_creating_a_secret_record() {
@@ -332,6 +518,113 @@ fn table_exists(connection: &Connection, name: &str) -> bool {
             [name],
             |row| row.get(0),
         )
+        .unwrap()
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct VaultRows {
+    metadata: MetadataRow,
+    recovery: Vec<RecoveryRow>,
+    secrets: Vec<SecretRow>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct MetadataRow {
+    version: i64,
+    salt: Vec<u8>,
+    verifier_nonce: Vec<u8>,
+    verifier_ciphertext: Vec<u8>,
+    wrapped_data_key_nonce: Vec<u8>,
+    wrapped_data_key_ciphertext: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct RecoveryRow {
+    id: String,
+    salt: Vec<u8>,
+    verifier: Vec<u8>,
+    wrapped_data_key_nonce: Vec<u8>,
+    wrapped_data_key_ciphertext: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct SecretRow {
+    id: String,
+    nonce: Vec<u8>,
+    ciphertext: Vec<u8>,
+}
+
+fn vault_rows(path: &std::path::Path) -> VaultRows {
+    let connection = Connection::open(path).unwrap();
+    let metadata = connection
+        .query_row(
+            "SELECT version, salt, verifier_nonce, verifier_ciphertext,
+                    wrapped_data_key_nonce, wrapped_data_key_ciphertext
+             FROM secret_store_metadata WHERE id = 1",
+            [],
+            |row| {
+                Ok(MetadataRow {
+                    version: row.get(0)?,
+                    salt: row.get(1)?,
+                    verifier_nonce: row.get(2)?,
+                    verifier_ciphertext: row.get(3)?,
+                    wrapped_data_key_nonce: row.get(4)?,
+                    wrapped_data_key_ciphertext: row.get(5)?,
+                })
+            },
+        )
+        .unwrap();
+    VaultRows {
+        metadata,
+        recovery: recovery_rows_from(&connection),
+        secrets: encrypted_secret_rows_from(&connection),
+    }
+}
+
+fn recovery_rows(path: &std::path::Path) -> Vec<RecoveryRow> {
+    recovery_rows_from(&Connection::open(path).unwrap())
+}
+
+fn recovery_rows_from(connection: &Connection) -> Vec<RecoveryRow> {
+    let mut statement = connection
+        .prepare(
+            "SELECT id, salt, verifier, wrapped_data_key_nonce, wrapped_data_key_ciphertext
+             FROM recovery_codes ORDER BY id",
+        )
+        .unwrap();
+    statement
+        .query_map([], |row| {
+            Ok(RecoveryRow {
+                id: row.get(0)?,
+                salt: row.get(1)?,
+                verifier: row.get(2)?,
+                wrapped_data_key_nonce: row.get(3)?,
+                wrapped_data_key_ciphertext: row.get(4)?,
+            })
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+fn encrypted_secret_rows(path: &std::path::Path) -> Vec<SecretRow> {
+    encrypted_secret_rows_from(&Connection::open(path).unwrap())
+}
+
+fn encrypted_secret_rows_from(connection: &Connection) -> Vec<SecretRow> {
+    let mut statement = connection
+        .prepare("SELECT id, nonce, ciphertext FROM encrypted_secrets ORDER BY id")
+        .unwrap();
+    statement
+        .query_map([], |row| {
+            Ok(SecretRow {
+                id: row.get(0)?,
+                nonce: row.get(1)?,
+                ciphertext: row.get(2)?,
+            })
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
         .unwrap()
 }
 

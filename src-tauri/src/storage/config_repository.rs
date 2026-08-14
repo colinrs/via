@@ -6,6 +6,117 @@ use uuid::Uuid;
 
 use crate::{AppConfig, AuthConfig, Group, LocalForwardRule, SecretStore, SessionConfig, ViaError};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LanguagePreference {
+    #[serde(rename = "system")]
+    System,
+    #[serde(rename = "zh-CN")]
+    ZhCn,
+    #[serde(rename = "en")]
+    En,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FontSizePreference {
+    Small,
+    Medium,
+    Large,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemePreference {
+    System,
+    Light,
+    Dark,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AppPreferences {
+    pub language: LanguagePreference,
+    pub font_size: FontSizePreference,
+    pub theme: ThemePreference,
+}
+
+impl Default for AppPreferences {
+    fn default() -> Self {
+        Self {
+            language: LanguagePreference::System,
+            font_size: FontSizePreference::Medium,
+            theme: ThemePreference::System,
+        }
+    }
+}
+
+impl AppPreferences {
+    pub fn new(language: &str, font_size: &str, theme: &str) -> Result<Self, ViaError> {
+        Ok(Self {
+            language: LanguagePreference::parse(language)?,
+            font_size: FontSizePreference::parse(font_size)?,
+            theme: ThemePreference::parse(theme)?,
+        })
+    }
+}
+
+impl LanguagePreference {
+    fn parse(value: &str) -> Result<Self, ViaError> {
+        match value {
+            "system" => Ok(Self::System),
+            "zh-CN" => Ok(Self::ZhCn),
+            "en" => Ok(Self::En),
+            _ => Err(ViaError::InvalidPreferences),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::ZhCn => "zh-CN",
+            Self::En => "en",
+        }
+    }
+}
+
+impl FontSizePreference {
+    fn parse(value: &str) -> Result<Self, ViaError> {
+        match value {
+            "small" => Ok(Self::Small),
+            "medium" => Ok(Self::Medium),
+            "large" => Ok(Self::Large),
+            _ => Err(ViaError::InvalidPreferences),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Small => "small",
+            Self::Medium => "medium",
+            Self::Large => "large",
+        }
+    }
+}
+
+impl ThemePreference {
+    fn parse(value: &str) -> Result<Self, ViaError> {
+        match value {
+            "system" => Ok(Self::System),
+            "light" => Ok(Self::Light),
+            "dark" => Ok(Self::Dark),
+            _ => Err(ViaError::InvalidPreferences),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Light => "light",
+            Self::Dark => "dark",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ImportMode {
     Merge,
@@ -32,6 +143,49 @@ impl ConfigRepository {
             sessions,
             rules,
         })
+    }
+
+    pub fn load_preferences(&self) -> Result<AppPreferences, ViaError> {
+        let connection = self.connection()?;
+        let stored = connection
+            .query_row(
+                "SELECT language, font_size, theme FROM app_preferences WHERE id = 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(database_error)?;
+        match stored {
+            Some((language, font_size, theme)) => {
+                AppPreferences::new(&language, &font_size, &theme)
+            }
+            None => Ok(AppPreferences::default()),
+        }
+    }
+
+    pub fn save_preferences(&self, preferences: &AppPreferences) -> Result<(), ViaError> {
+        self.connection()?
+            .execute(
+                "INSERT INTO app_preferences (id, language, font_size, theme)
+                 VALUES (1, ?1, ?2, ?3)
+                 ON CONFLICT(id) DO UPDATE SET
+                   language = excluded.language,
+                   font_size = excluded.font_size,
+                   theme = excluded.theme",
+                params![
+                    preferences.language.as_str(),
+                    preferences.font_size.as_str(),
+                    preferences.theme.as_str(),
+                ],
+            )
+            .map_err(database_error)?;
+        Ok(())
     }
 
     pub fn save(&self, config: &AppConfig) -> Result<(), ViaError> {
@@ -202,7 +356,13 @@ impl ConfigRepository {
              CREATE TABLE IF NOT EXISTS ssh_sessions (id TEXT PRIMARY KEY NOT NULL, group_id TEXT NOT NULL, name TEXT NOT NULL, host TEXT NOT NULL, port INTEGER NOT NULL, user TEXT NOT NULL, auth_json TEXT NOT NULL, FOREIGN KEY(group_id) REFERENCES session_groups(id) ON DELETE CASCADE);
              CREATE TABLE IF NOT EXISTS local_forward_rules (id TEXT PRIMARY KEY NOT NULL, session_id TEXT NOT NULL, enabled INTEGER NOT NULL, local_port INTEGER NOT NULL, target_host TEXT NOT NULL, target_port INTEGER NOT NULL, note TEXT NOT NULL, FOREIGN KEY(session_id) REFERENCES ssh_sessions(id) ON DELETE CASCADE);
              CREATE TABLE IF NOT EXISTS encrypted_secrets (id TEXT PRIMARY KEY NOT NULL, nonce BLOB NOT NULL, ciphertext BLOB NOT NULL);
-             CREATE TABLE IF NOT EXISTS secret_store_metadata (id INTEGER PRIMARY KEY CHECK(id = 1), version INTEGER NOT NULL, salt BLOB NOT NULL, verifier_nonce BLOB NOT NULL, verifier_ciphertext BLOB NOT NULL);",
+             CREATE TABLE IF NOT EXISTS secret_store_metadata (id INTEGER PRIMARY KEY CHECK(id = 1), version INTEGER NOT NULL, salt BLOB NOT NULL, verifier_nonce BLOB NOT NULL, verifier_ciphertext BLOB NOT NULL);
+             CREATE TABLE IF NOT EXISTS app_preferences (
+               id INTEGER PRIMARY KEY CHECK(id = 1),
+               language TEXT NOT NULL CHECK(language IN ('system', 'zh-CN', 'en')),
+               font_size TEXT NOT NULL CHECK(font_size IN ('small', 'medium', 'large')),
+               theme TEXT NOT NULL CHECK(theme IN ('system', 'light', 'dark'))
+             );",
         ).map_err(database_error)?;
         Ok(connection)
     }

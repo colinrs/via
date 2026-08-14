@@ -205,6 +205,42 @@ impl SecretStore {
         Ok(recovery_codes)
     }
 
+    pub fn change_master_password(
+        &self,
+        current_password: &str,
+        new_master_password: &str,
+    ) -> Result<(), ViaError> {
+        validate_master_password(current_password)?;
+        validate_master_password(new_master_password)?;
+
+        {
+            let state = self.state.lock().map_err(lock_error)?;
+            if state.key.is_none() {
+                return Err(ViaError::SecretStoreLocked);
+            }
+        }
+
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(database_error)?;
+        let metadata = load_metadata(&transaction)?.ok_or(ViaError::SecretStoreLocked)?;
+        if metadata.version != CURRENT_VERSION {
+            return Err(ViaError::Storage("unsupported secret store version".into()));
+        }
+        let data_key = Zeroizing::new(unlock_data_key(current_password, metadata)?);
+        let (salt, verifier, wrapped_data_key) =
+            master_password_records(new_master_password, &data_key)?;
+        update_metadata(&transaction, &salt, &verifier, &wrapped_data_key)?;
+        transaction.commit().map_err(database_error)?;
+
+        let mut state = self.state.lock().map_err(lock_error)?;
+        if state.key.is_some() {
+            state.key = Some(data_key);
+        }
+        Ok(())
+    }
+
     pub fn lock(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.key.take();
@@ -555,6 +591,39 @@ fn insert_metadata(
             ],
         )
         .map_err(database_error)?;
+    Ok(())
+}
+
+fn update_metadata(
+    transaction: &Transaction<'_>,
+    salt: &[u8; 16],
+    verifier: &EncryptedValue,
+    wrapped_data_key: &EncryptedValue,
+) -> Result<(), ViaError> {
+    let updated = transaction
+        .execute(
+            "UPDATE secret_store_metadata SET
+               salt = ?1,
+               verifier_nonce = ?2,
+               verifier_ciphertext = ?3,
+               wrapped_data_key_nonce = ?4,
+               wrapped_data_key_ciphertext = ?5
+             WHERE id = 1 AND version = ?6",
+            params![
+                salt.as_slice(),
+                verifier.nonce.as_slice(),
+                verifier.ciphertext,
+                wrapped_data_key.nonce.as_slice(),
+                wrapped_data_key.ciphertext,
+                CURRENT_VERSION,
+            ],
+        )
+        .map_err(database_error)?;
+    if updated != 1 {
+        return Err(ViaError::Storage(
+            "secret store metadata was not updated".into(),
+        ));
+    }
     Ok(())
 }
 

@@ -2,9 +2,143 @@ use rusqlite::Connection;
 use std::sync::{Arc, Barrier};
 use uuid::Uuid;
 use via::{
-    AppConfig, AuthConfig, ConfigRepository, Group, ImportMode, LocalForwardRule, SecretStore,
-    SessionConfig, ViaError, commands::config::persist_session_secret,
+    AppConfig, AppPreferences, AuthConfig, ConfigRepository, FontSizePreference, Group, ImportMode,
+    LanguagePreference, LocalForwardRule, SecretStore, SessionConfig, ThemePreference, ViaError,
+    commands::config::persist_session_secret,
 };
+
+#[test]
+fn preferences_default_then_persist_without_entering_exported_configuration() {
+    let repository = ConfigRepository::new(temp_config_path());
+
+    assert_eq!(
+        repository.load_preferences().unwrap(),
+        AppPreferences::default()
+    );
+
+    repository
+        .save_preferences(&AppPreferences::new("en", "large", "dark").unwrap())
+        .unwrap();
+
+    assert_eq!(
+        repository.load_preferences().unwrap().language,
+        LanguagePreference::En
+    );
+    assert!(
+        !repository
+            .export_json(&AppConfig::default())
+            .unwrap()
+            .contains("fontSize")
+    );
+}
+
+#[test]
+fn preference_constructor_accepts_only_exact_supported_values() {
+    assert_eq!(
+        AppPreferences::new("zh-CN", "small", "light").unwrap(),
+        AppPreferences {
+            language: LanguagePreference::ZhCn,
+            font_size: FontSizePreference::Small,
+            theme: ThemePreference::Light,
+        }
+    );
+    assert_eq!(
+        AppPreferences::new("system", "medium", "system").unwrap(),
+        AppPreferences::default()
+    );
+
+    for values in [
+        ("zh-cn", "medium", "system"),
+        ("en ", "medium", "system"),
+        ("en", "Medium", "system"),
+        ("en", "large ", "system"),
+        ("en", "large", "Dark"),
+        ("en", "large", "dark "),
+    ] {
+        assert_eq!(
+            AppPreferences::new(values.0, values.1, values.2),
+            Err(ViaError::InvalidPreferences)
+        );
+    }
+}
+
+#[test]
+fn preference_serde_uses_camel_case_and_rejects_invalid_payloads() {
+    let preferences = AppPreferences::new("zh-CN", "large", "dark").unwrap();
+    assert_eq!(
+        serde_json::to_value(preferences).unwrap(),
+        serde_json::json!({
+            "language": "zh-CN",
+            "fontSize": "large",
+            "theme": "dark"
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<AppPreferences>(serde_json::json!({
+            "language": "en",
+            "fontSize": "small",
+            "theme": "light"
+        }))
+        .unwrap(),
+        AppPreferences::new("en", "small", "light").unwrap()
+    );
+
+    for payload in [
+        serde_json::json!({ "language": "EN", "fontSize": "small", "theme": "light" }),
+        serde_json::json!({ "language": "en", "fontSize": "huge", "theme": "light" }),
+        serde_json::json!({ "language": "en", "fontSize": "small", "theme": "blue" }),
+        serde_json::json!({
+            "language": "en",
+            "fontSize": "small",
+            "font_size": "large",
+            "theme": "light"
+        }),
+    ] {
+        assert!(serde_json::from_value::<AppPreferences>(payload).is_err());
+    }
+}
+
+#[test]
+fn preference_storage_constraints_reject_unknown_values() {
+    let path = temp_config_path();
+    let repository = ConfigRepository::new(path.clone());
+    repository.load_preferences().unwrap();
+    let connection = Connection::open(path).unwrap();
+
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO app_preferences (id, language, font_size, theme)
+                 VALUES (1, 'en', 'huge', 'dark')",
+                [],
+            )
+            .is_err()
+    );
+    assert_eq!(
+        repository.load_preferences().unwrap(),
+        AppPreferences::default()
+    );
+}
+
+#[test]
+fn unknown_stored_preference_is_rejected_instead_of_applied() {
+    let path = temp_config_path();
+    let repository = ConfigRepository::new(path.clone());
+    repository.load_preferences().unwrap();
+    let connection = Connection::open(path).unwrap();
+    connection
+        .execute_batch(
+            "PRAGMA ignore_check_constraints = ON;
+             INSERT INTO app_preferences (id, language, font_size, theme)
+             VALUES (1, 'en', 'large', 'midnight');",
+        )
+        .unwrap();
+
+    assert_eq!(
+        repository.load_preferences(),
+        Err(ViaError::InvalidPreferences)
+    );
+}
 
 #[test]
 fn setting_a_password_secret_updates_only_that_sessions_secret_id() {

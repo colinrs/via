@@ -11,6 +11,7 @@ pub enum ViaError {
     NotFound(&'static str),
     Storage(String),
     InvalidImport(String),
+    InvalidPreferences,
     SecretStoreLocked,
     InvalidMasterPassword,
     InvalidRecoveryCode,

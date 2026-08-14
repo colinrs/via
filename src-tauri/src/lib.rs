@@ -12,4 +12,7 @@ pub use services::{
     AuthenticatedSession, BoxedIo, ConnectSecrets, Forwarder, HostTrustStore, SshConnector,
     TunnelManager,
 };
-pub use storage::{ConfigRepository, ImportMode, SecretStore};
+pub use storage::{
+    AppPreferences, ConfigRepository, FontSizePreference, ImportMode, LanguagePreference,
+    SecretStore, ThemePreference,
+};

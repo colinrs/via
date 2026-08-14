@@ -14,6 +14,7 @@ import SecretUnlockDialog from './components/SecretUnlockDialog.vue'
 import SessionSidebar, { type SessionGroup } from './components/SessionSidebar.vue'
 import TunnelGrid from './components/TunnelGrid.vue'
 import { createI18n, provideI18n, type I18n } from './i18n'
+import type { TranslationKey } from './i18n/catalog'
 import { createViaStore } from './stores/via'
 import type { LocalForwardRule } from './types/via'
 
@@ -30,7 +31,8 @@ const recoveryCodes = ref<string[]>([])
 const recoveryCodesAcknowledged = ref(false)
 const secretOperationBusy = ref(false)
 const credentialOperationMayProduceCodes = ref(false)
-const statusError = ref('')
+type StatusErrorKey = Extract<TranslationKey, `error.${string}`>
+const statusError = ref<StatusErrorKey | null>(null)
 const exportedJson = ref('')
 const hostTrust = ref<{ host: string; port: number; algorithm: string; fingerprint: string } | null>(null)
 const deleteSessionOpen = ref(false)
@@ -87,7 +89,7 @@ const deleteGroupMessage = computed(() => {
   return `${warning}${t('message.deleteGroupScope', { sessions: pending.sessionIds.length, rules: pending.ruleIds.length })}`
 })
 const backendStatus = computed(() => {
-  if (statusError.value) return statusError.value
+  if (statusError.value) return t(statusError.value)
   if (store.initializationState === 'connecting') return t('status.backendConnecting')
   if (store.initializationState === 'failed') return t('status.backendFailed')
   return t('status.backendReady')
@@ -98,7 +100,7 @@ async function saveConfig() {
   configurationSaving.value = true
   let succeeded = false
   const operation = configurationSaveTail.then(async () => {
-    try { await store.save(); statusError.value = ''; succeeded = true } catch { statusError.value = t('error.saveConfig') }
+    try { await store.save(); statusError.value = null; succeeded = true } catch { statusError.value = 'error.saveConfig' }
   })
   configurationSaveTail = operation
   await operation
@@ -144,7 +146,7 @@ async function choosePrivateKey() {
       if (originatingSession?.auth === auth && originatingSession.auth.kind === 'private_key') originatingSession.auth.path = previousPath
     }
   } catch {
-    statusError.value = t('error.choosePrivateKey')
+    statusError.value = 'error.choosePrivateKey'
   } finally {
     authenticationPicking.value = false
   }
@@ -160,7 +162,7 @@ async function saveAuthentication() {
   authenticationSaving.value = true
   try {
     if (!(await saveConfig())) {
-      statusError.value = t('error.saveAuthenticationConfig')
+      statusError.value = 'error.saveAuthenticationConfig'
       return
     }
     const persistedSession = store.sessions.find((item) => item.id === sessionId)
@@ -171,15 +173,15 @@ async function saveAuthentication() {
     }
     await store.saveSessionSecret(sessionId, secret)
     if (selectedSessionId.value === sessionId && selectedSession.value?.auth.kind === authKind && draft.value === secret) draft.value = ''
-    statusError.value = ''
+    statusError.value = null
   } catch {
-    statusError.value = t('error.saveAuthenticationCredentials')
+    statusError.value = 'error.saveAuthenticationCredentials'
   } finally {
     authenticationSaving.value = false
   }
 }
 async function updateRule(nextRule: LocalForwardRule) { const index = store.rules.findIndex((rule) => rule.id === nextRule.id); if (index >= 0) store.rules.splice(index, 1, nextRule); await persist() }
-async function toggleRule(nextRule: LocalForwardRule) { await updateRule(nextRule); try { if (nextRule.enabled) await store.startRule(nextRule.id); else await store.stopRule(nextRule.id) } catch { statusError.value = t('error.ruleOperation') } }
+async function toggleRule(nextRule: LocalForwardRule) { await updateRule(nextRule); try { if (nextRule.enabled) await store.startRule(nextRule.id); else await store.stopRule(nextRule.id) } catch { statusError.value = 'error.ruleOperation' } }
 async function addRule() { if (!selectedSessionId.value) return; store.rules.push({ id: crypto.randomUUID(), sessionId: selectedSessionId.value, enabled: false, localPort: 1, targetHost: 'localhost', targetPort: 1, note: '', runtimeState: 'stopped' }); await persist() }
 async function cloneRule(id: string) { const source = store.rules.find((rule) => rule.id === id); if (source) { store.rules.push({ ...source, id: crypto.randomUUID(), localPort: 1, runtimeState: 'stopped', enabled: false }); await persist() } }
 function requestRemoveRule(id: string) { pendingRuleId.value = id }
@@ -197,12 +199,12 @@ async function removeRule() {
     const index = store.rules.findIndex((item) => item.id === id)
     if (index >= 0) store.rules.splice(index, 1)
     pendingRuleId.value = null
-    statusError.value = ''
+    statusError.value = null
   } catch {
     await store.reloadConfig().catch(() => undefined)
     if (!store.rules.some((item) => item.id === id)) pendingRuleId.value = null
     if (!store.sessions.some((session) => session.id === selectedSessionId.value)) selectedSessionId.value = store.sessions[0]?.id ?? null
-    statusError.value = t('error.deleteRule')
+    statusError.value = 'error.deleteRule'
   } finally {
     ruleDeletionBusy.value = false
   }
@@ -214,8 +216,8 @@ function hostTrustRequest(error: unknown) {
   const match = /HostTrustRequired \{ host: "([^"]+)", port: (\d+), algorithm: "([^"]+)", fingerprint: "([^"]+)" \}/.exec(value)
   return match ? { host: match[1], port: Number(match[2]), algorithm: match[3], fingerprint: match[4] } : null
 }
-async function connect() { if (!selectedSessionId.value) return; try { await store.connectSession(selectedSessionId.value); await startAll() } catch (error) { hostTrust.value = hostTrustRequest(error); const value = String(error); statusError.value = hostTrust.value ? '' : value.includes('HostKeyChanged') ? t('error.hostKeyChanged') : t('error.connect') } }
-async function approveHostTrust() { if (!hostTrust.value) return; const request = hostTrust.value; try { await store.approveHostKey(request.host, request.port, request.algorithm, request.fingerprint); hostTrust.value = null; await connect() } catch { statusError.value = t('error.saveHostTrust') } }
+async function connect() { if (!selectedSessionId.value) return; try { await store.connectSession(selectedSessionId.value); await startAll() } catch (error) { hostTrust.value = hostTrustRequest(error); const value = String(error); statusError.value = hostTrust.value ? null : value.includes('HostKeyChanged') ? 'error.hostKeyChanged' : 'error.connect' } }
+async function approveHostTrust() { if (!hostTrust.value) return; const request = hostTrust.value; try { await store.approveHostKey(request.host, request.port, request.algorithm, request.fingerprint); hostTrust.value = null; await connect() } catch { statusError.value = 'error.saveHostTrust' } }
 async function disconnect() { if (selectedSessionId.value) await store.disconnectSession(selectedSessionId.value) }
 async function initializeSecrets(password: string) {
   if (secretOperationBusy.value || !setupOpen.value || recoveryCodes.value.length > 0) return
@@ -224,9 +226,9 @@ async function initializeSecrets(password: string) {
   try {
     recoveryCodes.value = await store.initializeSecrets(password)
     recoveryCodesAcknowledged.value = false
-    statusError.value = ''
+    statusError.value = null
   } catch {
-    statusError.value = t('error.initializeCredentials')
+    statusError.value = 'error.initializeCredentials'
   } finally {
     credentialOperationMayProduceCodes.value = false
     secretOperationBusy.value = false
@@ -242,9 +244,9 @@ async function unlock(password: string) {
     unlockMode.value = 'unlock'
     recoveryCodes.value = codes ?? []
     recoveryCodesAcknowledged.value = false
-    statusError.value = ''
+    statusError.value = null
   } catch {
-    statusError.value = t('error.unlockCredentials')
+    statusError.value = 'error.unlockCredentials'
   } finally {
     credentialOperationMayProduceCodes.value = false
     secretOperationBusy.value = false
@@ -260,9 +262,9 @@ async function recover(code: string, password: string) {
     unlockMode.value = 'unlock'
     recoveryCodes.value = codes
     recoveryCodesAcknowledged.value = false
-    statusError.value = ''
+    statusError.value = null
   } catch {
-    statusError.value = t('error.recoverCredentials')
+    statusError.value = 'error.recoverCredentials'
   } finally {
     credentialOperationMayProduceCodes.value = false
     secretOperationBusy.value = false
@@ -292,11 +294,11 @@ function warnBeforeClosingWithCodes(event: BeforeUnloadEvent) {
   event.preventDefault()
   event.returnValue = ''
 }
-async function openTransfer(mode: 'import' | 'export') { try { exportedJson.value = mode === 'export' ? await store.exportConfig() : ''; importMode.value = mode } catch { statusError.value = t('error.readConfig') } }
-async function transfer(json: string, replaceAll: boolean) { try { if (importMode.value === 'export') await navigator.clipboard.writeText(json); else { await store.importConfig(json, replaceAll); selectedSessionId.value = store.sessions[0]?.id ?? null }; importMode.value = null } catch { statusError.value = t('error.processConfig') } }
+async function openTransfer(mode: 'import' | 'export') { try { exportedJson.value = mode === 'export' ? await store.exportConfig() : ''; importMode.value = mode } catch { statusError.value = 'error.readConfig' } }
+async function transfer(json: string, replaceAll: boolean) { try { if (importMode.value === 'export') await navigator.clipboard.writeText(json); else { await store.importConfig(json, replaceAll); selectedSessionId.value = store.sessions[0]?.id ?? null }; importMode.value = null } catch { statusError.value = 'error.processConfig' } }
 function requestCreateSession() { if (store.groups.length) createSessionOpen.value = true; else void addSession() }
 async function addSession(groupId?: string) { const group = store.groups.find((item) => item.id === groupId) ?? store.groups[0] ?? { id: crypto.randomUUID(), name: t('message.defaultGroup') }; if (!store.groups.length) store.groups.push(group); const id = crypto.randomUUID(); store.sessions.push({ id, groupId: group.id, name: t('message.unnamedSession'), host: 'localhost', port: 22, user: 'root', auth: { kind: 'password', secretId: null } }); selectedSessionId.value = id; createSessionOpen.value = false; await persist() }
-async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false; statusError.value = '' } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); statusError.value = t('error.createGroup') } }
+async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false; statusError.value = null } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); statusError.value = 'error.createGroup' } }
 function groupDeletionSignature(id: string): GroupDeletionScope {
   const sessionIds = store.sessions
     .filter((session) => session.groupId === id)
@@ -358,12 +360,12 @@ async function removeGroup(generation: number) {
     if (groupIndex >= 0) store.groups.splice(groupIndex, 1)
     selectedSessionId.value = store.sessions[0]?.id ?? null
     pendingGroupDeletion.value = null
-    statusError.value = ''
+    statusError.value = null
   } catch {
     await store.reloadConfig().catch(() => undefined)
     if (!store.groups.some((group) => group.id === pending.id)) pendingGroupDeletion.value = null
     if (!store.sessions.some((session) => session.id === selectedSessionId.value)) selectedSessionId.value = store.sessions[0]?.id ?? null
-    statusError.value = t('error.deleteGroup')
+    statusError.value = 'error.deleteGroup'
   } finally {
     groupDeletionBusy.value = false
   }
@@ -386,12 +388,12 @@ async function removeSession() {
     if (index >= 0) store.sessions.splice(index, 1)
     selectedSessionId.value = store.sessions[0]?.id ?? null
     deleteSessionOpen.value = false
-    statusError.value = ''
+    statusError.value = null
   } catch {
     store.sessions.splice(0, store.sessions.length, ...previousSessions)
     store.rules.splice(0, store.rules.length, ...previousRules)
     selectedSessionId.value = id
-    statusError.value = t('error.deleteSession')
+    statusError.value = 'error.deleteSession'
   } finally {
     sessionDeletionBusy.value = false
   }

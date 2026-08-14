@@ -154,6 +154,28 @@ describe('App', () => {
     expect(wrapper.text()).not.toContain('No SSH sessions yet')
   })
 
+  it('retranslates an existing status error when the app locale changes', async () => {
+    const i18n = createI18n('en')
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      if (command === 'export_config') throw new Error('export unavailable')
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+
+    const wrapper = mount(App, { props: { i18n } })
+    await flushPromises()
+    await wrapper.findAll('.title-actions button')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.statusbar').text()).toContain('Could not read configuration.')
+
+    i18n.setLanguage('zh-CN')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('.statusbar').text()).toContain('无法读取配置。')
+    expect(wrapper.get('.statusbar').text()).not.toContain('Could not read configuration.')
+  })
+
   it('renders the tunnel management workspace after startup confirms a configured vault', async () => {
     const wrapper = await mountAppWithSecretStatus({ configured: true })
 

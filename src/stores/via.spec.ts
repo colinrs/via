@@ -84,7 +84,7 @@ describe('ViaStore', () => {
 
   it('loads validated preferences and sends a complete preference update', async () => {
     const invoke = vi.fn().mockImplementation((command: string) => command === 'load_preferences'
-      ? { language: 'en', fontSize: 'large', theme: 'dark' } : undefined)
+      ? { language: 'en', fontSize: 'large', theme: 'dark' } : null)
     const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
 
     await store.loadPreferences()
@@ -95,27 +95,76 @@ describe('ViaStore', () => {
     expect(invoke).toHaveBeenCalledWith('save_preferences', { preferences: { language: 'zh-CN', fontSize: 'small', theme: 'light' } })
   })
 
-  it('rejects preference payloads with missing, unknown, or invalid values', async () => {
+  it('keeps a canonical preference copy after the caller mutates a saved input', async () => {
+    const invoke = vi.fn().mockResolvedValue(null)
+    const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
+    const preferences = { language: 'en', fontSize: 'large', theme: 'dark' } as const
+
+    await store.savePreferences(preferences)
+    ;(preferences as { language: string }).language = 'system'
+
+    expect(store.preferences).toEqual({ language: 'en', fontSize: 'large', theme: 'dark' })
+  })
+
+  it('rejects malformed preference responses without replacing the current preferences', async () => {
     const invalidPayloads: unknown[] = [
       {},
       { language: 'en', fontSize: 'medium' },
       { language: 'en', fontSize: 'medium', theme: 'system', extra: true },
       { language: 'invalid', fontSize: 'medium', theme: 'system' },
+      { language: 'en', fontSize: 'invalid', theme: 'system' },
+      { language: 'en', fontSize: 'medium', theme: 'invalid' },
+      null,
+      ['en', 'medium', 'system'],
     ]
 
     for (const payload of invalidPayloads) {
       const store = createViaStore({
-        invoke: vi.fn().mockResolvedValue(payload),
+        invoke: vi.fn().mockImplementation((command: string) => command === 'load_preferences'
+          ? payload : null),
+        listen: vi.fn(),
+      } as ViaBridge)
+      const previous = { ...store.preferences }
+
+      await expect(store.loadPreferences()).rejects.toThrow('invalid preferences')
+      expect(store.preferences).toEqual(previous)
+    }
+  })
+
+  it('rejects invalid preference saves before invoking the backend', async () => {
+    const invoke = vi.fn().mockResolvedValue(null)
+    const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
+
+    await expect(store.savePreferences({ language: 'en', fontSize: 'medium', theme: 'dark', extra: true } as unknown as typeof store.preferences)).rejects.toThrow('invalid preferences')
+
+    expect(invoke).not.toHaveBeenCalled()
+    expect(store.preferences).toEqual({ language: 'system', fontSize: 'medium', theme: 'system' })
+  })
+
+  it('requires a null unit response before applying a preference save', async () => {
+    const responses: unknown[] = [undefined, {}, 'ok']
+    for (const response of responses) {
+      const store = createViaStore({
+        invoke: vi.fn().mockResolvedValue(response),
         listen: vi.fn(),
       } as ViaBridge)
 
-      await expect(store.loadPreferences()).rejects.toThrow('invalid preferences')
+      await expect(store.savePreferences({ language: 'en', fontSize: 'large', theme: 'dark' })).rejects.toThrow('invalid unit response')
       expect(store.preferences).toEqual({ language: 'system', fontSize: 'medium', theme: 'system' })
     }
   })
 
-  it('changes the master password without retaining either password', async () => {
-    const invoke = vi.fn().mockResolvedValue(undefined)
+  it('preserves current preferences when the backend rejects a save', async () => {
+    const invoke = vi.fn().mockRejectedValue(new Error('save failed'))
+    const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
+
+    await expect(store.savePreferences({ language: 'en', fontSize: 'large', theme: 'dark' })).rejects.toThrow('save failed')
+
+    expect(store.preferences).toEqual({ language: 'system', fontSize: 'medium', theme: 'system' })
+  })
+
+  it('requires a null unit response when changing the master password without retaining either password', async () => {
+    const invoke = vi.fn().mockResolvedValue(null)
     const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
 
     await expect(store.changeMasterPassword('current password', 'new password')).resolves.toBeUndefined()
@@ -126,6 +175,17 @@ describe('ViaStore', () => {
     })
     expect(JSON.stringify(store)).not.toContain('current password')
     expect(JSON.stringify(store)).not.toContain('new password')
+  })
+
+  it('rejects malformed unit responses when changing the master password', async () => {
+    for (const response of [undefined, {}, 'ok']) {
+      const store = createViaStore({
+        invoke: vi.fn().mockResolvedValue(response),
+        listen: vi.fn(),
+      } as ViaBridge)
+
+      await expect(store.changeMasterPassword('current password', 'new password')).rejects.toThrow('invalid unit response')
+    }
   })
 
   it('starts enabled rules through the selected session command', async () => {
@@ -163,6 +223,7 @@ describe('ViaStore', () => {
 
     expect(store.secretStoreConfigured).toBe(false)
     expect(invoke).toHaveBeenCalledWith('secret_store_status')
+    expect(invoke).not.toHaveBeenCalledWith('load_preferences')
   })
 
   it('fails closed when secret-store status is malformed', async () => {

@@ -20,3 +20,17 @@ After adding the new store-contract tests, `npm test -- src/stores/via.spec.ts` 
 - `cargo check --manifest-path src-tauri/Cargo.toml` — passed.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check` — passed after formatting.
 - `git diff --check` — passed.
+
+## Review fix round 1
+
+### Red
+
+The added regressions failed before the fix because `savePreferences` retained the caller object reference and both unit-returning commands accepted `undefined` as success.
+
+### Green
+
+- `validatePreferences` now returns a new canonical plain object before state assignment.
+- `save_preferences` and `change_master_password` invoke as `unknown` and accept only JSON `null`; malformed values throw without applying a preference save.
+- Regressions cover input mutation after save, invalid save input without IPC, malformed response shapes and values, rejected saves, malformed unit responses, and the guarantee that `initialize()` does not invoke `load_preferences`.
+- `npm test -- src/stores/via.spec.ts` — passed: 25 tests.
+- `npm run typecheck` — passed.

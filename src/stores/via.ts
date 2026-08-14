@@ -120,7 +120,14 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
       || !['system', 'light', 'dark'].includes(record.theme as string)) {
       throw new Error('invalid preferences')
     }
-    return record as unknown as AppPreferences
+    return {
+      language: record.language as AppPreferences['language'],
+      fontSize: record.fontSize as AppPreferences['fontSize'],
+      theme: record.theme as AppPreferences['theme'],
+    }
+  }
+  const validateUnitResponse = (value: unknown): void => {
+    if (value !== null) throw new Error('invalid unit response')
   }
   const refreshSecretStoreStatus = async (): Promise<string[] | null> => {
     const status = await runtime.invoke<unknown>('secret_store_status')
@@ -180,11 +187,11 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     },
     async savePreferences(preferences: AppPreferences) {
       const validated = validatePreferences(preferences)
-      await runtime.invoke('save_preferences', { preferences: validated })
+      validateUnitResponse(await runtime.invoke<unknown>('save_preferences', { preferences: validated }))
       state.preferences = validated
     },
     async changeMasterPassword(currentPassword: string, newPassword: string) {
-      await runtime.invoke('change_master_password', { currentPassword, newPassword })
+      validateUnitResponse(await runtime.invoke<unknown>('change_master_password', { currentPassword, newPassword }))
     },
     async deleteSession(sessionId: string) {
       await runtime.invoke('delete_session', { sessionId })

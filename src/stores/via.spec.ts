@@ -82,6 +82,52 @@ describe('ViaStore', () => {
     expect(listen).not.toHaveBeenCalled()
   })
 
+  it('loads validated preferences and sends a complete preference update', async () => {
+    const invoke = vi.fn().mockImplementation((command: string) => command === 'load_preferences'
+      ? { language: 'en', fontSize: 'large', theme: 'dark' } : undefined)
+    const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
+
+    await store.loadPreferences()
+    expect(store.preferences).toEqual({ language: 'en', fontSize: 'large', theme: 'dark' })
+
+    await store.savePreferences({ language: 'zh-CN', fontSize: 'small', theme: 'light' })
+
+    expect(invoke).toHaveBeenCalledWith('save_preferences', { preferences: { language: 'zh-CN', fontSize: 'small', theme: 'light' } })
+  })
+
+  it('rejects preference payloads with missing, unknown, or invalid values', async () => {
+    const invalidPayloads: unknown[] = [
+      {},
+      { language: 'en', fontSize: 'medium' },
+      { language: 'en', fontSize: 'medium', theme: 'system', extra: true },
+      { language: 'invalid', fontSize: 'medium', theme: 'system' },
+    ]
+
+    for (const payload of invalidPayloads) {
+      const store = createViaStore({
+        invoke: vi.fn().mockResolvedValue(payload),
+        listen: vi.fn(),
+      } as ViaBridge)
+
+      await expect(store.loadPreferences()).rejects.toThrow('invalid preferences')
+      expect(store.preferences).toEqual({ language: 'system', fontSize: 'medium', theme: 'system' })
+    }
+  })
+
+  it('changes the master password without retaining either password', async () => {
+    const invoke = vi.fn().mockResolvedValue(undefined)
+    const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
+
+    await expect(store.changeMasterPassword('current password', 'new password')).resolves.toBeUndefined()
+
+    expect(invoke).toHaveBeenCalledWith('change_master_password', {
+      currentPassword: 'current password',
+      newPassword: 'new password',
+    })
+    expect(JSON.stringify(store)).not.toContain('current password')
+    expect(JSON.stringify(store)).not.toContain('new password')
+  })
+
   it('starts enabled rules through the selected session command', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined)
     const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)

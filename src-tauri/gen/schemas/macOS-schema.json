@@ -183,6 +183,12 @@
           "markdownDescription": "Enables the approve_host_key command without any pre-configured scope."
         },
         {
+          "description": "Enables the change_master_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-change-master-password",
+          "markdownDescription": "Enables the change_master_password command without any pre-configured scope."
+        },
+        {
           "description": "Enables the connect_session command without any pre-configured scope.",
           "type": "string",
           "const": "allow-connect-session",
@@ -243,6 +249,12 @@
           "markdownDescription": "Enables the load_config command without any pre-configured scope."
         },
         {
+          "description": "Enables the load_preferences command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-load-preferences",
+          "markdownDescription": "Enables the load_preferences command without any pre-configured scope."
+        },
+        {
           "description": "Enables the lock_secrets command without any pre-configured scope.",
           "type": "string",
           "const": "allow-lock-secrets",
@@ -265,6 +277,12 @@
           "type": "string",
           "const": "allow-save-config",
           "markdownDescription": "Enables the save_config command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_preferences command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-preferences",
+          "markdownDescription": "Enables the save_preferences command without any pre-configured scope."
         },
         {
           "description": "Enables the save_session_secret command without any pre-configured scope.",
@@ -313,6 +331,12 @@
           "type": "string",
           "const": "deny-approve-host-key",
           "markdownDescription": "Denies the approve_host_key command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the change_master_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-change-master-password",
+          "markdownDescription": "Denies the change_master_password command without any pre-configured scope."
         },
         {
           "description": "Denies the connect_session command without any pre-configured scope.",
@@ -375,6 +399,12 @@
           "markdownDescription": "Denies the load_config command without any pre-configured scope."
         },
         {
+          "description": "Denies the load_preferences command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-load-preferences",
+          "markdownDescription": "Denies the load_preferences command without any pre-configured scope."
+        },
+        {
           "description": "Denies the lock_secrets command without any pre-configured scope.",
           "type": "string",
           "const": "deny-lock-secrets",
@@ -397,6 +427,12 @@
           "type": "string",
           "const": "deny-save-config",
           "markdownDescription": "Denies the save_config command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_preferences command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-preferences",
+          "markdownDescription": "Denies the save_preferences command without any pre-configured scope."
         },
         {
           "description": "Denies the save_session_secret command without any pre-configured scope.",

@@ -1,5 +1,6 @@
 use crate::{
-    AppConfig, ConfigRepository, Group, ImportMode, SecretStore, ViaError, app_state::AppState,
+    AppConfig, AppPreferences, ConfigRepository, Group, ImportMode, SecretStore, ViaError,
+    app_state::AppState,
 };
 use tauri::State;
 use uuid::Uuid;
@@ -20,6 +21,25 @@ pub fn load_config(state: State<'_, AppState>) -> Result<AppConfig, String> {
 #[tauri::command]
 pub fn save_config(state: State<'_, AppState>, config: AppConfig) -> Result<(), String> {
     state.config.save(&config).map_err(|e| format!("{e:?}"))
+}
+
+#[tauri::command]
+pub fn load_preferences(state: State<'_, AppState>) -> Result<AppPreferences, String> {
+    state
+        .config
+        .load_preferences()
+        .map_err(|e| format!("{e:?}"))
+}
+
+#[tauri::command]
+pub fn save_preferences(
+    state: State<'_, AppState>,
+    preferences: AppPreferences,
+) -> Result<(), String> {
+    state
+        .config
+        .save_preferences(&preferences)
+        .map_err(|e| format!("{e:?}"))
 }
 #[tauri::command]
 pub fn delete_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {

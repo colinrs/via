@@ -20,6 +20,18 @@ export interface PersistedConfig {
   rules: LocalForwardRule[]
 }
 
+export interface AppPreferences {
+  language: 'system' | 'zh-CN' | 'en'
+  fontSize: 'small' | 'medium' | 'large'
+  theme: 'system' | 'light' | 'dark'
+}
+
+const defaultPreferences: AppPreferences = {
+  language: 'system',
+  fontSize: 'medium',
+  theme: 'system',
+}
+
 export type InitializationState = 'idle' | 'connecting' | 'ready' | 'failed'
 
 export interface ViaStore {
@@ -29,9 +41,13 @@ export interface ViaStore {
   initialized: boolean
   initializationState: InitializationState
   secretStoreConfigured: boolean | null
+  preferences: AppPreferences
   initialize(): Promise<void>
   reloadConfig(): Promise<void>
   save(): Promise<void>
+  loadPreferences(): Promise<void>
+  savePreferences(preferences: AppPreferences): Promise<void>
+  changeMasterPassword(currentPassword: string, newPassword: string): Promise<void>
   deleteSession(sessionId: string): Promise<void>
   deleteGroup(groupId: string): Promise<void>
   deleteRule(ruleId: string): Promise<void>
@@ -69,6 +85,7 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     initialized: false,
     initializationState: 'idle' as InitializationState,
     secretStoreConfigured: null as boolean | null,
+    preferences: { ...defaultPreferences },
   })
   let unsubscribe: (() => void) | undefined
   const reconnectAttempts = new Map<string, number>()
@@ -89,6 +106,21 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
       throw new Error('invalid recovery codes')
     }
     return value as string[]
+  }
+  const validatePreferences = (value: unknown): AppPreferences => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid preferences')
+    const record = value as Record<string, unknown>
+    const keys = Object.keys(record)
+    if (keys.length !== 3
+      || !keys.includes('language')
+      || !keys.includes('fontSize')
+      || !keys.includes('theme')
+      || !['system', 'zh-CN', 'en'].includes(record.language as string)
+      || !['small', 'medium', 'large'].includes(record.fontSize as string)
+      || !['system', 'light', 'dark'].includes(record.theme as string)) {
+      throw new Error('invalid preferences')
+    }
+    return record as unknown as AppPreferences
   }
   const refreshSecretStoreStatus = async (): Promise<string[] | null> => {
     const status = await runtime.invoke<unknown>('secret_store_status')
@@ -143,6 +175,17 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
       await runtime.invoke('save_config', { config: snapshot() })
     },
     reloadConfig,
+    async loadPreferences() {
+      state.preferences = validatePreferences(await runtime.invoke<unknown>('load_preferences'))
+    },
+    async savePreferences(preferences: AppPreferences) {
+      const validated = validatePreferences(preferences)
+      await runtime.invoke('save_preferences', { preferences: validated })
+      state.preferences = validated
+    },
+    async changeMasterPassword(currentPassword: string, newPassword: string) {
+      await runtime.invoke('change_master_password', { currentPassword, newPassword })
+    },
     async deleteSession(sessionId: string) {
       await runtime.invoke('delete_session', { sessionId })
     },

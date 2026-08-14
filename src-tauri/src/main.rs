@@ -12,6 +12,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             via::commands::config::load_config,
             via::commands::config::save_config,
+            via::commands::config::load_preferences,
+            via::commands::config::save_preferences,
             via::commands::config::delete_session,
             via::commands::config::delete_group,
             via::commands::config::delete_rule,
@@ -23,6 +25,7 @@ fn main() {
             via::commands::security::initialize_secrets,
             via::commands::security::unlock_secrets,
             via::commands::security::recover_secrets,
+            via::commands::security::change_master_password,
             via::commands::security::lock_secrets,
             via::commands::security::approve_host_key,
             via::commands::tunnels::connect_session,

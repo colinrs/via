@@ -52,6 +52,18 @@ pub fn recover_secrets(
 }
 
 #[tauri::command]
+pub fn change_master_password(
+    state: State<'_, AppState>,
+    current_password: String,
+    new_password: String,
+) -> Result<(), String> {
+    state
+        .secrets
+        .change_master_password(&current_password, &new_password)
+        .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
 pub fn lock_secrets(state: State<'_, AppState>) {
     state.secrets.lock();
 }

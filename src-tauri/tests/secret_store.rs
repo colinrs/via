@@ -4,10 +4,7 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit},
 };
 use rusqlite::{Connection, params};
-use std::{
-    sync::{Arc, Barrier, mpsc},
-    time::Duration,
-};
+use std::sync::{Arc, Barrier};
 use uuid::Uuid;
 use via::{SecretStore, ViaError};
 
@@ -164,34 +161,6 @@ fn blank_password_change_inputs_do_not_modify_the_vault() {
     );
 
     assert_eq!(vault_rows(store.path()), snapshot);
-}
-
-#[test]
-fn password_change_waiting_for_sqlite_does_not_block_secret_reads() {
-    let path = temp_secret_path();
-    let store = Arc::new(SecretStore::new(path.clone()));
-    store.initialize("old password").unwrap();
-    let secret_id = store.put("ssh-password").unwrap();
-    let blocker = Connection::open(&path).unwrap();
-    blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
-
-    let changing_store = Arc::clone(&store);
-    let change = std::thread::spawn(move || {
-        changing_store.change_master_password("old password", "new password")
-    });
-    std::thread::sleep(Duration::from_millis(100));
-    let reading_store = Arc::clone(&store);
-    let (read_sender, read_receiver) = mpsc::channel();
-    let read = std::thread::spawn(move || {
-        read_sender.send(reading_store.get(secret_id)).unwrap();
-    });
-
-    let read_result = read_receiver.recv_timeout(Duration::from_secs(1));
-    blocker.execute_batch("COMMIT").unwrap();
-    change.join().unwrap().unwrap();
-    read.join().unwrap();
-
-    assert_eq!(read_result.unwrap().unwrap(), "ssh-password");
 }
 
 #[test]

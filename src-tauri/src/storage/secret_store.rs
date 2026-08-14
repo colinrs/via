@@ -18,7 +18,10 @@ use zeroize::Zeroizing;
 use crate::ViaError;
 
 #[cfg(test)]
-use std::sync::{Arc, Barrier};
+use std::sync::{
+    Arc, Barrier,
+    atomic::{AtomicBool, Ordering},
+};
 
 const LEGACY_VERIFIER: &[u8] = b"via-secret-store-v1";
 const VERIFIER: &[u8] = b"via-secret-store-v2";
@@ -27,6 +30,26 @@ const RECOVERY_CODE_COUNT: usize = 10;
 
 #[cfg(test)]
 static CHANGE_MASTER_PASSWORD_CHECKPOINT: Mutex<Option<Arc<(Barrier, Barrier)>>> = Mutex::new(None);
+
+#[cfg(test)]
+struct SqliteBusyCheckpoint {
+    reached: Barrier,
+    signaled: AtomicBool,
+}
+
+#[cfg(test)]
+static SQLITE_BUSY_CHECKPOINT: Mutex<Option<Arc<SqliteBusyCheckpoint>>> = Mutex::new(None);
+
+#[cfg(test)]
+fn signal_sqlite_busy(_attempts: i32) -> bool {
+    let checkpoint = SQLITE_BUSY_CHECKPOINT.lock().unwrap().clone();
+    if let Some(checkpoint) = checkpoint
+        && !checkpoint.signaled.swap(true, Ordering::SeqCst)
+    {
+        checkpoint.reached.wait();
+    }
+    true
+}
 
 pub struct SecretStore {
     path: PathBuf,
@@ -409,6 +432,12 @@ impl SecretStore {
             std::fs::create_dir_all(parent).map_err(storage_error)?;
         }
         let mut connection = Connection::open(&self.path).map_err(database_error)?;
+        #[cfg(test)]
+        if SQLITE_BUSY_CHECKPOINT.lock().unwrap().is_some() {
+            connection
+                .busy_handler(Some(signal_sqlite_busy))
+                .map_err(database_error)?;
+        }
         ensure_schema(&mut connection)?;
         Ok(connection)
     }
@@ -849,6 +878,7 @@ fn random_array<const N: usize>() -> Result<[u8; N], ViaError> {
 mod tests {
     use super::*;
     use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::{sync::mpsc, time::Duration};
 
     fn metadata_snapshot(path: &Path) -> (i64, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
         Connection::open(path)
@@ -902,5 +932,43 @@ mod tests {
         assert!(change.join().unwrap().is_err());
         *CHANGE_MASTER_PASSWORD_CHECKPOINT.lock().unwrap() = None;
         assert_eq!(metadata_snapshot(store.path()), snapshot);
+    }
+
+    #[test]
+    fn password_change_waiting_for_sqlite_does_not_block_secret_reads() {
+        let path = std::env::temp_dir().join(format!(
+            "via-secret-store-sqlite-wait-{}.db",
+            Uuid::new_v4()
+        ));
+        let store = Arc::new(SecretStore::new(path.clone()));
+        store.initialize("old password").unwrap();
+        let secret_id = store.put("ssh-password").unwrap();
+        let blocker = Connection::open(&path).unwrap();
+        blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let checkpoint = Arc::new(SqliteBusyCheckpoint {
+            reached: Barrier::new(2),
+            signaled: AtomicBool::new(false),
+        });
+        *SQLITE_BUSY_CHECKPOINT.lock().unwrap() = Some(Arc::clone(&checkpoint));
+
+        let changing_store = Arc::clone(&store);
+        let change = std::thread::spawn(move || {
+            changing_store.change_master_password("old password", "new password")
+        });
+        checkpoint.reached.wait();
+
+        let reading_store = Arc::clone(&store);
+        let (read_sender, read_receiver) = mpsc::channel();
+        let read = std::thread::spawn(move || {
+            read_sender.send(reading_store.get(secret_id)).unwrap();
+        });
+
+        let read_result = read_receiver.recv_timeout(Duration::from_secs(1));
+        blocker.execute_batch("COMMIT").unwrap();
+        change.join().unwrap().unwrap();
+        read.join().unwrap();
+        *SQLITE_BUSY_CHECKPOINT.lock().unwrap() = None;
+
+        assert_eq!(read_result.unwrap().unwrap(), "ssh-password");
     }
 }

@@ -16,7 +16,12 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import RecoveryCodesDialog from './components/RecoveryCodesDialog.vue'
 import SecretSetupDialog from './components/SecretSetupDialog.vue'
 import SecretUnlockDialog from './components/SecretUnlockDialog.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
 import { createI18n } from './i18n'
+import type { AppPreferences } from './stores/via'
+
+const chinesePreferences: AppPreferences = { language: 'zh-CN', fontSize: 'medium', theme: 'system' }
+const englishPreferences: AppPreferences = { language: 'en', fontSize: 'medium', theme: 'system' }
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -44,6 +49,7 @@ function mountAppWithGroups(groups: Array<{ id: string; name: string }>) {
   invoke.mockImplementation(async (command: string) => {
     if (command === 'load_config') return { schemaVersion: 1, groups, sessions: [], rules: [] }
     if (command === 'secret_store_status') return { configured: true }
+    if (command === 'load_preferences') return chinesePreferences
     return undefined
   })
   listen.mockResolvedValue(() => undefined)
@@ -86,6 +92,7 @@ function mountAppWithConfig(config: {
   invoke.mockImplementation(async (command: string) => {
     if (commandHandlers[command]) return commandHandlers[command]()
     if (command === 'load_config') return { schemaVersion: 1, ...config }
+    if (command === 'load_preferences') return chinesePreferences
     if (failures.has(command)) throw new Error(`${command} failed`)
     return command === 'secret_store_status' ? { configured: true } : undefined
   })
@@ -131,11 +138,186 @@ function mountAppWithSecretStatus({
 }
 
 describe('App', () => {
+  it('loads and applies saved preferences before exposing the workspace', async () => {
+    const preferenceLoad = deferred<AppPreferences>()
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return preferenceLoad.promise
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+
+    const wrapper = mount(App)
+    await flushPromises()
+    expect(invoke).toHaveBeenCalledWith('load_preferences', undefined)
+    expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
+
+    preferenceLoad.resolve({ language: 'en', fontSize: 'large', theme: 'dark' })
+    await flushPromises()
+
+    expect(document.documentElement.lang).toBe('en')
+    expect(document.documentElement.dataset.fontSize).toBe('large')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(wrapper.get('[aria-label="Settings"]').text()).toContain('Settings')
+    expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
+    wrapper.unmount()
+  })
+
+  it('does not apply a late preference load after the app is unmounted', async () => {
+    const preferenceLoad = deferred<AppPreferences>()
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return preferenceLoad.promise
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+    document.documentElement.dataset.fontSize = 'small'
+    document.documentElement.dataset.theme = 'light'
+
+    const wrapper = mount(App)
+    await flushPromises()
+    wrapper.unmount()
+    preferenceLoad.resolve({ language: 'en', fontSize: 'large', theme: 'dark' })
+    await flushPromises()
+
+    expect(document.documentElement.dataset.fontSize).toBe('small')
+    expect(document.documentElement.dataset.theme).toBe('light')
+  })
+
+  it('falls back to defaults and reports a translated error when preferences cannot be loaded', async () => {
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return { language: 'invalid', fontSize: 'huge', theme: 'unknown' }
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+
+    const wrapper = mount(App, { props: { i18n: createI18n('en') } })
+    await flushPromises()
+
+    expect(document.documentElement.dataset.fontSize).toBe('medium')
+    expect(wrapper.get('.statusbar').text()).toContain('Could not load settings')
+    expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
+    wrapper.unmount()
+  })
+
+  it('optimistically applies a preference and rolls back when its save fails', async () => {
+    const preferenceSave = deferred<null>()
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return { language: 'en', fontSize: 'medium', theme: 'light' }
+      if (command === 'save_preferences') return preferenceSave.promise
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+    const wrapper = mount(App)
+    await flushPromises()
+
+    await wrapper.get('[aria-label="Settings"]').trigger('click')
+    await wrapper.get('select[aria-label="Theme"]').setValue('dark')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+
+    preferenceSave.reject(new Error('backend failure with sensitive details'))
+    await flushPromises()
+
+    expect(document.documentElement.dataset.theme).toBe('light')
+    expect(wrapper.get('select[aria-label="Theme"]').element).toHaveProperty('value', 'light')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Could not save settings. Please try again.')
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain('sensitive details')
+    wrapper.unmount()
+  })
+
+  it('serializes preference saves without allowing an older completion to overwrite the latest choice', async () => {
+    const firstSave = deferred<null>()
+    const secondSave = deferred<null>()
+    let saveCount = 0
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return { language: 'en', fontSize: 'medium', theme: 'light' }
+      if (command === 'save_preferences') {
+        saveCount += 1
+        return saveCount === 1 ? firstSave.promise : secondSave.promise
+      }
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+    const wrapper = mount(App)
+    await flushPromises()
+    await wrapper.get('[aria-label="Settings"]').trigger('click')
+    const dialog = wrapper.getComponent(SettingsDialog)
+    const savesBeforeUpdates = invoke.mock.calls.filter(([command]) => command === 'save_preferences').length
+
+    dialog.vm.$emit('updatePreferences', { language: 'en', fontSize: 'medium', theme: 'dark' })
+    dialog.vm.$emit('updatePreferences', { language: 'en', fontSize: 'large', theme: 'dark' })
+    await wrapper.vm.$nextTick()
+    expect(invoke.mock.calls.filter(([command]) => command === 'save_preferences')).toHaveLength(savesBeforeUpdates + 1)
+
+    firstSave.resolve(null)
+    await flushPromises()
+    expect(invoke.mock.calls.filter(([command]) => command === 'save_preferences')).toHaveLength(savesBeforeUpdates + 2)
+    expect(dialog.props('preferences')).toEqual({ language: 'en', fontSize: 'large', theme: 'dark' })
+    expect(document.documentElement.dataset.fontSize).toBe('large')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+
+    secondSave.resolve(null)
+    await flushPromises()
+    expect(invoke.mock.calls.filter(([command]) => command === 'save_preferences').slice(savesBeforeUpdates).map(([, args]) => args)).toEqual([
+      { preferences: { language: 'en', fontSize: 'medium', theme: 'dark' } },
+      { preferences: { language: 'en', fontSize: 'large', theme: 'dark' } },
+    ])
+    wrapper.unmount()
+  })
+
+  it('keeps password drafts after a safe failure and clears them only after a successful change', async () => {
+    let changeAttempts = 0
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return { language: 'en', fontSize: 'medium', theme: 'light' }
+      if (command === 'change_master_password') {
+        changeAttempts += 1
+        if (changeAttempts === 1) throw new Error('backend leaked old master')
+        return null
+      }
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+    const wrapper = mount(App)
+    await flushPromises()
+    await wrapper.get('[aria-label="Settings"]').trigger('click')
+
+    await wrapper.get('input[aria-label="Current master password"]').setValue('old master')
+    await wrapper.get('input[aria-label="New master password"]').setValue('new master')
+    await wrapper.get('input[aria-label="Confirm new master password"]').setValue('new master')
+    await wrapper.get('[data-testid="change-master-password"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Could not change the master password.')
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain('old master')
+    expect((wrapper.get('input[aria-label="Current master password"]').element as HTMLInputElement).value).toBe('old master')
+
+    await wrapper.get('[data-testid="change-master-password"]').trigger('click')
+    await flushPromises()
+
+    expect(invoke).toHaveBeenLastCalledWith('change_master_password', { currentPassword: 'old master', newPassword: 'new master' })
+    expect((wrapper.get('input[aria-label="Current master password"]').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('input[aria-label="New master password"]').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('input[aria-label="Confirm new master password"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain('Could not change the master password.')
+    wrapper.unmount()
+  })
+
   it('provides one reactive translation instance to app copy and child components', async () => {
     const i18n = createI18n('en')
     invoke.mockImplementation(async (command: string) => {
       if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return englishPreferences
       return undefined
     })
     listen.mockResolvedValue(() => undefined)
@@ -159,6 +341,7 @@ describe('App', () => {
     invoke.mockImplementation(async (command: string) => {
       if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return englishPreferences
       if (command === 'export_config') throw new Error('export unavailable')
       return undefined
     })
@@ -592,6 +775,7 @@ describe('App', () => {
     invoke.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
       if (command === 'load_config') return { schemaVersion: 1, ...config }
       if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return chinesePreferences
       if (command === 'save_session_secret') {
         return {
           schemaVersion: 1,
@@ -848,6 +1032,7 @@ describe('App', () => {
     invoke.mockImplementation(async (command: string) => {
       if (command === 'load_config') return { schemaVersion: 1, ...config }
       if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return chinesePreferences
       if (command === 'save_session_secret') return { schemaVersion: 1, ...config }
       return undefined
     })
@@ -876,6 +1061,7 @@ describe('App', () => {
     invoke.mockImplementation(async (command: string) => {
       if (command === 'load_config') return { schemaVersion: 1, ...config }
       if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return chinesePreferences
       if (command === 'save_session_secret') return {
         schemaVersion: 1,
         ...config,

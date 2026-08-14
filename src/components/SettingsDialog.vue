@@ -11,12 +11,14 @@ const props = withDefaults(defineProps<{
   saving?: boolean
   masterPasswordChanging?: boolean
   masterPasswordConfigured?: boolean
+  preferencesError?: string
   masterPasswordError?: string
   masterPasswordChangedToken?: number
 }>(), {
   saving: false,
   masterPasswordChanging: false,
   masterPasswordConfigured: false,
+  preferencesError: '',
   masterPasswordError: '',
   masterPasswordChangedToken: 0,
 })
@@ -103,6 +105,7 @@ watch(() => props.masterPasswordChangedToken, clearPasswords)
             <option value="dark">{{ t('settings.theme.dark') }}</option>
           </select>
         </label>
+        <p v-if="preferencesError" class="error" role="alert">{{ preferencesError }}</p>
       </fieldset>
 
       <fieldset v-if="masterPasswordConfigured" :disabled="masterPasswordChanging" :aria-busy="masterPasswordChanging">

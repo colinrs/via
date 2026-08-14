@@ -11,11 +11,13 @@ import ImportDialog from './components/ImportDialog.vue'
 import RecoveryCodesDialog from './components/RecoveryCodesDialog.vue'
 import SecretSetupDialog from './components/SecretSetupDialog.vue'
 import SecretUnlockDialog from './components/SecretUnlockDialog.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
 import SessionSidebar, { type SessionGroup } from './components/SessionSidebar.vue'
 import TunnelGrid from './components/TunnelGrid.vue'
 import { createI18n, provideI18n, type I18n } from './i18n'
 import type { TranslationKey } from './i18n/catalog'
-import { createViaStore } from './stores/via'
+import { applyDocumentPreferences } from './preferences/document'
+import { createViaStore, type AppPreferences } from './stores/via'
 import type { LocalForwardRule } from './types/via'
 
 const props = defineProps<{ i18n?: I18n }>()
@@ -31,8 +33,22 @@ const recoveryCodes = ref<string[]>([])
 const recoveryCodesAcknowledged = ref(false)
 const secretOperationBusy = ref(false)
 const credentialOperationMayProduceCodes = ref(false)
-type StatusErrorKey = Extract<TranslationKey, `error.${string}`>
+type StatusErrorKey = Extract<TranslationKey, `error.${string}`> | 'settings.loadFailed'
 const statusError = ref<StatusErrorKey | null>(null)
+const settingsOpen = ref(false)
+const preferencesReady = ref(false)
+const preferences = ref<AppPreferences>({ ...store.preferences })
+const preferenceSaving = ref(false)
+const preferenceErrorKey = ref<'settings.saveFailed' | null>(null)
+const masterPasswordChanging = ref(false)
+const masterPasswordErrorKey = ref<'settings.changePasswordFailed' | null>(null)
+const masterPasswordChangedToken = ref(0)
+let persistedPreferences: AppPreferences = { ...store.preferences }
+let preferenceRevision = 0
+let queuedPreferenceSaves = 0
+let preferenceSaveTail: Promise<void> = Promise.resolve()
+let cleanupDocumentPreferences: (() => void) | undefined
+let appMounted = false
 const exportedJson = ref('')
 const hostTrust = ref<{ host: string; port: number; algorithm: string; fingerprint: string } | null>(null)
 const deleteSessionOpen = ref(false)
@@ -78,10 +94,15 @@ const activeCount = computed(() => store.rules.filter((rule) => rule.runtimeStat
 const errorCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'conflict' || rule.runtimeState === 'failed').length)
 const authenticationBusy = computed(() => authenticationSaving.value || authenticationPicking.value)
 const authenticationControlsBusy = computed(() => authenticationBusy.value || configurationSaving.value)
-const setupOpen = computed(() => store.initializationState === 'ready' && store.secretStoreConfigured === false)
+const setupOpen = computed(() => preferencesReady.value
+  && store.initializationState === 'ready'
+  && store.secretStoreConfigured === false)
 const workspaceReady = computed(() => store.initializationState === 'ready'
+  && preferencesReady.value
   && store.secretStoreConfigured === true
   && recoveryCodes.value.length === 0)
+const preferenceErrorMessage = computed(() => preferenceErrorKey.value ? t(preferenceErrorKey.value) : '')
+const masterPasswordErrorMessage = computed(() => masterPasswordErrorKey.value ? t(masterPasswordErrorKey.value) : '')
 const deleteGroupMessage = computed(() => {
   const pending = pendingGroupDeletion.value
   if (!pending) return ''
@@ -94,6 +115,82 @@ const backendStatus = computed(() => {
   if (store.initializationState === 'failed') return t('status.backendFailed')
   return t('status.backendReady')
 })
+
+function validPreferences(value: unknown): value is AppPreferences {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const candidate = value as Record<string, unknown>
+  return Object.keys(candidate).length === 3
+    && ['system', 'zh-CN', 'en'].includes(candidate.language as string)
+    && ['small', 'medium', 'large'].includes(candidate.fontSize as string)
+    && ['system', 'light', 'dark'].includes(candidate.theme as string)
+}
+
+function applyPreferences(next: AppPreferences) {
+  cleanupDocumentPreferences?.()
+  preferences.value = { ...next }
+  i18n.setLanguage(next.language)
+  cleanupDocumentPreferences = applyDocumentPreferences(next, window, document)
+}
+
+async function updatePreferences(next: AppPreferences) {
+  if (!validPreferences(next)) return
+  const revision = ++preferenceRevision
+  queuedPreferenceSaves += 1
+  preferenceSaving.value = true
+  preferenceErrorKey.value = null
+  applyPreferences(next)
+
+  const operation = preferenceSaveTail.then(async () => {
+    try {
+      await store.savePreferences(next)
+      persistedPreferences = { ...next }
+      if (revision === preferenceRevision && appMounted) {
+        preferenceErrorKey.value = null
+        if (statusError.value === 'settings.loadFailed') statusError.value = null
+      }
+    } catch {
+      if (revision === preferenceRevision && appMounted) {
+        applyPreferences(persistedPreferences)
+        preferenceErrorKey.value = 'settings.saveFailed'
+      }
+    }
+  })
+  preferenceSaveTail = operation
+  await operation
+  queuedPreferenceSaves -= 1
+  if (queuedPreferenceSaves === 0) preferenceSaving.value = false
+}
+
+function openSettings() {
+  if (!workspaceReady.value) return
+  preferenceErrorKey.value = null
+  masterPasswordErrorKey.value = null
+  settingsOpen.value = true
+}
+
+function closeSettings() {
+  settingsOpen.value = false
+  preferenceErrorKey.value = null
+  masterPasswordErrorKey.value = null
+}
+
+async function changeMasterPassword(currentPassword: string, newPassword: string) {
+  if (masterPasswordChanging.value
+    || !settingsOpen.value
+    || store.secretStoreConfigured !== true
+    || !currentPassword.trim()
+    || !newPassword.trim()) return
+  masterPasswordChanging.value = true
+  masterPasswordErrorKey.value = null
+  try {
+    await store.changeMasterPassword(currentPassword, newPassword)
+    masterPasswordChangedToken.value += 1
+  } catch {
+    masterPasswordErrorKey.value = 'settings.changePasswordFailed'
+  } finally {
+    masterPasswordChanging.value = false
+  }
+}
 
 async function saveConfig() {
   queuedConfigurationSaves += 1
@@ -404,10 +501,30 @@ watch(selectedSessionId, () => {
   clearAuthenticationDrafts()
 })
 onMounted(async () => {
+  appMounted = true
   window.addEventListener('beforeunload', warnBeforeClosingWithCodes)
-  try { await store.initialize(); selectedSessionId.value = store.sessions[0]?.id ?? null } catch {}
+  try {
+    await store.initialize()
+    if (!appMounted) return
+    selectedSessionId.value = store.sessions[0]?.id ?? null
+    try {
+      await store.loadPreferences()
+      if (!appMounted) return
+      persistedPreferences = { ...store.preferences }
+    } catch {
+      if (!appMounted) return
+      statusError.value = 'settings.loadFailed'
+    }
+    if (!appMounted) return
+    applyPreferences(persistedPreferences)
+    preferencesReady.value = true
+  } catch {}
 })
-onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeClosingWithCodes))
+onBeforeUnmount(() => {
+  appMounted = false
+  cleanupDocumentPreferences?.()
+  window.removeEventListener('beforeunload', warnBeforeClosingWithCodes)
+})
 </script>
 
 <template>
@@ -415,7 +532,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeClosi
     <fieldset data-testid="app-interactions" class="app-interactions" :disabled="authenticationBusy || secretOperationBusy">
     <header class="titlebar">
       <div class="brand"><span class="mark">V</span><span>Via</span><span class="version">{{ t('app.mvpVersion') }}</span></div>
-      <div v-if="workspaceReady" class="title-actions"><button type="button" @click="openTransfer('import')">{{ t('action.importConfig') }}</button><button type="button" @click="openTransfer('export')">{{ t('action.exportConfig') }}</button><button type="button" @click="openUnlock">{{ t('action.unlockCredentials') }}</button></div>
+      <div v-if="workspaceReady" class="title-actions"><button type="button" @click="openTransfer('import')">{{ t('action.importConfig') }}</button><button type="button" @click="openTransfer('export')">{{ t('action.exportConfig') }}</button><button type="button" @click="openUnlock">{{ t('action.unlockCredentials') }}</button><button type="button" :aria-label="t('app.settings')" @click="openSettings">⚙ {{ t('app.settings') }}</button></div>
     </header>
     <div v-if="workspaceReady" class="workspace">
       <SessionSidebar :groups="groups" :selected-session-id="selectedSessionId ?? ''" @select="selectedSessionId = $event" @create="requestCreateSession" @create-group="createGroupOpen=true" @delete-group="requestRemoveGroup" />
@@ -458,6 +575,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeClosi
     <ConfirmDialog :key="pendingGroupDeletion?.generation ?? 0" :generation="pendingGroupDeletion?.generation ?? 0" :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" :title="t('dialog.deleteGroup.title')" :message="deleteGroupMessage" :confirm-text="t('sidebar.deleteGroup')" @close="closeGroupDeletion" @confirm="removeGroup" @ready="armGroupDeletionConfirmation" />
     <CreateGroupDialog :open="createGroupOpen" @close="createGroupOpen=false" @create="createGroup" />
     <CreateSessionDialog :open="createSessionOpen" :groups="store.groups" @close="createSessionOpen=false" @create="addSession" />
+    <SettingsDialog :open="settingsOpen" :preferences="preferences" :saving="preferenceSaving" :preferences-error="preferenceErrorMessage" :master-password-changing="masterPasswordChanging" :master-password-configured="store.secretStoreConfigured === true" :master-password-error="masterPasswordErrorMessage" :master-password-changed-token="masterPasswordChangedToken" @update-preferences="updatePreferences" @change-master-password="changeMasterPassword" @close="closeSettings" />
     </fieldset>
   </main>
 </template>

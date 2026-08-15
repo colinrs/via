@@ -10,6 +10,8 @@
 
 **English:** At work I rely on SSH remote forwarding to reach internal services through a bastion host. I used to start all these tunnels with bash scripts, but I couldn't find a tool that let me centrally manage and keep track of them. So I built Via — a desktop app for unified SSH local forwarding and management.
 
+![port-forwarding](./assets/port-forwarding.png)
+
 ## 核心原理 · How It Works
 
 Via 只做一件事：把本机端口经 SSH 会话安全地转发到远端内网地址。

@@ -18,10 +18,20 @@ const root = ref<HTMLElement | null>(null)
 function toggle() { open.value = !open.value }
 function close() { open.value = false }
 function choose(action: Action) {
-  if (action === 'import') emit('import')
-  else if (action === 'export') emit('export')
-  else if (action === 'unlock') emit('unlock')
-  else emit('settings')
+  switch (action) {
+    case 'import':
+      emit('import')
+      break
+    case 'export':
+      emit('export')
+      break
+    case 'unlock':
+      emit('unlock')
+      break
+    case 'settings':
+      emit('settings')
+      break
+  }
   close()
 }
 
@@ -56,9 +66,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .config-menu { position: relative; display: inline-flex; }
-.config-button { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 14px; cursor: pointer; }
+.config-button { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); font-size: 14px; cursor: pointer; }
 .config-button:hover { border-color: var(--muted); }
-.menu { position: absolute; bottom: 34px; left: 0; z-index: 90; display: flex; min-width: 190px; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); padding: 5px; box-shadow: 0 10px 30px rgb(0 0 0 / 40%); }
+.menu { position: absolute; bottom: 34px; left: 0; z-index: 90; display: flex; min-width: 190px; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); padding: 5px; box-shadow: 0 10px 30px rgb(0 0 0 / 40%); }
 .menu button { border: 0; border-radius: 7px; padding: 8px 10px; background: transparent; color: var(--text); text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
 .menu button:hover { background: var(--surface); }
 </style>

@@ -5,8 +5,8 @@ mod services;
 mod storage;
 
 pub use domain::{
-    AppConfig, AuthConfig, Group, LocalForwardRule, RuntimeRuleState, SessionConfig, TunnelState,
-    ViaError,
+    AppConfig, AuthConfig, Group, LocalForwardRule, RuntimeRuleState, RuntimeSnapshot,
+    SessionConfig, TunnelState, ViaError,
 };
 pub use services::{
     AuthenticatedSession, BoxedIo, ConnectSecrets, Forwarder, HostTrustStore, SshConnector,

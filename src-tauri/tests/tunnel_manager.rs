@@ -53,6 +53,7 @@ async fn closed_transport_moves_running_rule_to_reconnecting() {
         manager
             .snapshot()
             .await
+            .rules
             .iter()
             .any(|item| item.rule_id == rule.id && item.state == TunnelState::Reconnecting)
     );
@@ -76,11 +77,13 @@ async fn conflicting_rule_does_not_stop_an_active_sibling_rule() {
     let states = manager.snapshot().await;
     assert!(
         states
+            .rules
             .iter()
             .any(|item| item.rule_id == active.id && item.state == TunnelState::Active)
     );
     assert!(
         states
+            .rules
             .iter()
             .any(|item| item.rule_id == conflict.id && item.state == TunnelState::Conflict)
     );
@@ -101,6 +104,7 @@ async fn manual_stop_prevents_a_later_transport_drop_from_reconnecting_the_rule(
         manager
             .snapshot()
             .await
+            .rules
             .iter()
             .any(|item| item.rule_id == rule.id && item.state == TunnelState::Stopped)
     );
@@ -118,7 +122,7 @@ async fn transport_drop_restarts_active_rules_for_the_session() {
 
     manager.simulate_transport_drop(session_id).await;
 
-    assert!(manager.snapshot().await.iter().any(|item| {
+    assert!(manager.snapshot().await.rules.iter().any(|item| {
         item.rule_id == rule.id && item.state == TunnelState::Active && item.message.is_none()
     }));
 }
@@ -139,10 +143,42 @@ async fn disconnecting_a_session_stops_its_running_rules() {
         manager
             .snapshot()
             .await
+            .rules
             .iter()
             .any(|item| item.rule_id == rule.id && item.state == TunnelState::Stopped)
     );
 }
+#[tokio::test]
+async fn snapshot_reports_connected_sessions_and_rule_states() {
+    let manager = TunnelManager::new();
+    let session_id = uuid::Uuid::new_v4();
+    manager
+        .register_session(session_id, Arc::new(EchoSession))
+        .await;
+    let rule = rule(session_id, free_port());
+    manager.start_rule(rule.clone()).await.unwrap();
+
+    let snapshot = manager.snapshot().await;
+
+    assert!(snapshot.connected_session_ids.contains(&session_id));
+    assert!(snapshot
+        .rules
+        .iter()
+        .any(|item| item.rule_id == rule.id && item.state == TunnelState::Active));
+}
+
+#[tokio::test]
+async fn snapshot_omits_disconnected_sessions() {
+    let manager = TunnelManager::new();
+    let session_id = uuid::Uuid::new_v4();
+    manager
+        .register_session(session_id, Arc::new(EchoSession))
+        .await;
+    manager.disconnect_session(session_id).await;
+
+    assert!(!manager.snapshot().await.connected_session_ids.contains(&session_id));
+}
+
 fn rule(session_id: uuid::Uuid, port: u16) -> LocalForwardRule {
     LocalForwardRule::new(
         uuid::Uuid::new_v4(),

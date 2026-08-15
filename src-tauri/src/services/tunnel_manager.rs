@@ -1,5 +1,6 @@
 use crate::{
-    AuthenticatedSession, Forwarder, LocalForwardRule, RuntimeRuleState, TunnelState, ViaError,
+    AuthenticatedSession, Forwarder, LocalForwardRule, RuntimeRuleState, RuntimeSnapshot,
+    TunnelState, ViaError,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -174,8 +175,11 @@ impl TunnelManager {
             }
         }
     }
-    pub async fn snapshot(&self) -> Vec<RuntimeRuleState> {
-        self.states.lock().await.values().cloned().collect()
+    pub async fn snapshot(&self) -> RuntimeSnapshot {
+        RuntimeSnapshot {
+            rules: self.states.lock().await.values().cloned().collect(),
+            connected_session_ids: self.sessions.lock().await.keys().copied().collect(),
+        }
     }
     async fn set(&self, id: uuid::Uuid, state: TunnelState, message: Option<String>) {
         self.states.lock().await.insert(

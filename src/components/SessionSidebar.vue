@@ -115,9 +115,9 @@ const emit = defineEmits<{
 .delete-group:hover { color: var(--red); }
 .tree-children { position: relative; margin-left: 12px; padding-left: 10px; }
 .tree-children::before { position: absolute; top: 0; bottom: 8px; left: 0; width: 1px; background: var(--line); content: ''; }
-.session-item { display: grid; width: 100%; grid-template-columns: 16px 1fr 8px; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 7px; padding: 8px; color: var(--muted); background: transparent; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
+.session-item { display: grid; width: 100%; grid-template-columns: 16px 1fr 8px; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 8px; color: var(--muted); background: transparent; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
 .session-item:hover { background: var(--surface); color: var(--text); }
-.session-item.selected { border-color: rgb(56 139 253 / 45%); background: var(--surface-raised); color: var(--text); box-shadow: 0 4px 12px rgb(0 0 0 / 12%); }
+.session-item.selected { border-color: rgb(56 139 253 / 45%); background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-soft); }
 .server-icon { color: var(--blue); }.session-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-indicator { width: 7px; height: 7px; border-radius: 50%; background: #484f58; }.session-indicator.active { background: var(--green); box-shadow: 0 0 7px var(--green); }.session-indicator.failed { background: var(--red); }.session-indicator.stopped { background: #484f58; }
 </style>

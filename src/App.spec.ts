@@ -41,6 +41,10 @@ function openConfirmDialog(wrapper: ReturnType<typeof mount>) {
   return wrapper.findAllComponents(ConfirmDialog).find((dialog) => dialog.props('open'))!
 }
 
+async function openConfigMenu(wrapper: ReturnType<typeof mount>) {
+  await wrapper.get('[data-testid="config-button"]').trigger('click')
+}
+
 function mountChineseApp() {
   return mount(App, { props: { i18n: createI18n('zh-CN') } })
 }
@@ -160,7 +164,7 @@ describe('App', () => {
     expect(document.documentElement.dataset.fontSize).toBe('large')
     expect(document.documentElement.style.zoom).toBe('1.125')
     expect(document.documentElement.dataset.theme).toBe('dark')
-    expect(wrapper.get('[aria-label="Settings"]').text()).toContain('Settings')
+    expect(wrapper.get('[data-testid="config-button"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
     wrapper.unmount()
   })
@@ -218,7 +222,8 @@ describe('App', () => {
     const wrapper = mount(App)
     await flushPromises()
 
-    await wrapper.get('[aria-label="Settings"]').trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-settings"]').trigger('click')
     await wrapper.get('select[aria-label="Theme"]').setValue('dark')
     expect(document.documentElement.dataset.theme).toBe('dark')
 
@@ -249,7 +254,8 @@ describe('App', () => {
     listen.mockResolvedValue(() => undefined)
     const wrapper = mount(App)
     await flushPromises()
-    await wrapper.get('[aria-label="Settings"]').trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-settings"]').trigger('click')
     const dialog = wrapper.getComponent(SettingsDialog)
     const savesBeforeUpdates = invoke.mock.calls.filter(([command]) => command === 'save_preferences').length
 
@@ -290,7 +296,8 @@ describe('App', () => {
     listen.mockResolvedValue(() => undefined)
     const wrapper = mount(App)
     await flushPromises()
-    await wrapper.get('[aria-label="Settings"]').trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-settings"]').trigger('click')
 
     await wrapper.get('input[aria-label="Current master password"]').setValue('old master')
     await wrapper.get('input[aria-label="New master password"]').setValue('new master')
@@ -325,16 +332,36 @@ describe('App', () => {
 
     const wrapper = mount(App, { props: { i18n } })
     await flushPromises()
-    expect(wrapper.get('.title-actions').text()).toContain('Import configuration')
+    expect(wrapper.get('[data-testid="config-button"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="empty-workspace"]').text()).toContain('No SSH sessions yet')
     expect(wrapper.get('.statusbar').text()).toContain('Tunnels: 0 running / 0 issues')
 
     i18n.setLanguage('zh-CN')
     await wrapper.vm.$nextTick()
-    expect(wrapper.get('.title-actions').text()).toContain('导入配置')
+    await openConfigMenu(wrapper)
+    expect(wrapper.get('[data-testid="config-import"]').text()).toContain('导入配置')
     expect(wrapper.get('[data-testid="empty-workspace"]').text()).toContain('还没有 SSH 会话')
     expect(wrapper.get('.statusbar').text()).toContain('隧道：0 运行中 / 0 异常')
     expect(wrapper.text()).not.toContain('No SSH sessions yet')
+  })
+
+  it('translates a newly raised error in the current locale', async () => {
+    const i18n = createI18n('en')
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences') return englishPreferences
+      if (command === 'export_config') throw new Error('export unavailable')
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+
+    const wrapper = mount(App, { props: { i18n } })
+    await flushPromises()
+    await wrapper.get('[data-testid="config-button"]').trigger('click')
+    await wrapper.get('[data-testid="config-export"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('Could not read configuration.')
   })
 
   it('renders the tunnel management workspace after startup confirms a configured vault', async () => {
@@ -376,10 +403,10 @@ describe('App', () => {
     const connecting = mountAppWithPendingConfig()
     await connecting.vm.$nextTick()
     expect(connecting.find('[data-testid="session-sidebar"]').exists()).toBe(false)
-    expect(connecting.findAll('button').some((button) => button.text().includes('解锁凭据'))).toBe(false)
+    expect(connecting.find('[data-testid="config-button"]').exists()).toBe(false)
 
     const failed = await mountAppWithListenerFailure()
-    expect(failed.get('.statusbar').text()).toContain('无法连接本地后端')
+    expect(failed.get('[data-testid="backend-dot"]').classes()).toContain('backend-failed')
     expect(failed.find('[data-testid="session-sidebar"]').exists()).toBe(false)
   })
 
@@ -393,9 +420,9 @@ describe('App', () => {
     const wrapper = mountChineseApp()
     await flushPromises()
 
-    expect(wrapper.get('.statusbar').text()).toContain('无法连接本地后端')
+    expect(wrapper.get('[data-testid="backend-dot"]').classes()).toContain('backend-failed')
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
-    expect(wrapper.findAll('button').some((button) => button.text().includes('解锁凭据'))).toBe(false)
+    expect(wrapper.find('[data-testid="config-button"]').exists()).toBe(false)
   })
 
   it('keeps setup open, reports a safe error, and invokes initialization only once while pending', async () => {
@@ -426,7 +453,8 @@ describe('App', () => {
       configured: true,
       commandHandlers: { unlock_secrets: async () => codes },
     })
-    const unlockButton = wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!
+    await openConfigMenu(wrapper)
+    const unlockButton = wrapper.get('[data-testid="config-unlock"]')
     await unlockButton.trigger('click')
     wrapper.getComponent(SecretUnlockDialog).vm.$emit('unlock', 'master password')
     await flushPromises()
@@ -446,7 +474,8 @@ describe('App', () => {
       configured: true,
       commandHandlers: { unlock_secrets: () => pendingUnlock.promise },
     })
-    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
     const callsBeforeUnlock = invoke.mock.calls.filter(([command]) => command === 'unlock_secrets').length
 
@@ -467,7 +496,8 @@ describe('App', () => {
       configured: true,
       commandHandlers: { recover_secrets: () => pendingRecovery.promise },
     })
-    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
     await dialog.get('[data-testid="show-recovery"]').trigger('click')
     dialog.vm.$emit('recover', 'one-time-code', 'new master password')
@@ -502,7 +532,8 @@ describe('App', () => {
       configured: true,
       commandHandlers: { unlock_secrets: async () => undefined },
     })
-    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
 
     wrapper.getComponent(SecretUnlockDialog).vm.$emit('unlock', 'master password')
     await flushPromises()
@@ -518,7 +549,8 @@ describe('App', () => {
       configured: true,
       commandHandlers: { unlock_secrets: async () => codes },
     })
-    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const unlockDialog = wrapper.getComponent(SecretUnlockDialog)
     unlockDialog.vm.$emit('unlock', 'master password')
     await flushPromises()
@@ -544,7 +576,8 @@ describe('App', () => {
       configured: true,
       commandHandlers: { unlock_secrets: async () => recoveryCodes('ACK') },
     })
-    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     wrapper.getComponent(SecretUnlockDialog).vm.$emit('unlock', 'master password')
     await flushPromises()
     const codesDialog = wrapper.getComponent(RecoveryCodesDialog)
@@ -565,7 +598,8 @@ describe('App', () => {
       configured: true,
       commandHandlers: { recover_secrets: async () => recoveryCodes('RECOVERED') },
     })
-    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
     const recoveryCalls = invoke.mock.calls.filter(([command]) => command === 'recover_secrets').length
 
@@ -602,7 +636,8 @@ describe('App', () => {
       configured: true,
       commandHandlers: { recover_secrets: () => pendingRecovery.promise },
     })
-    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
     await dialog.get('[data-testid="show-recovery"]').trigger('click')
     dialog.vm.$emit('recover', 'recovery code', 'new master password')
@@ -678,7 +713,8 @@ describe('App', () => {
       },
     })
     const handler = addListener.mock.calls.find(([type]) => type === 'beforeunload')![1] as EventListener
-    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
     await dialog.get('[data-testid="show-recovery"]').trigger('click')
     dialog.vm.$emit('recover', 'recovery code', 'new master password')
@@ -710,7 +746,8 @@ describe('App', () => {
       configured: true,
       commandHandlers: { recover_secrets: async () => { throw new Error('invalid code SECRET-INPUT') } },
     })
-    await wrapper.findAll('button').find((button) => button.text().includes('解锁凭据'))!.trigger('click')
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
     await dialog.get('[data-testid="show-recovery"]').trigger('click')
     dialog.vm.$emit('recover', 'SECRET-INPUT', 'NEW-MASTER-PASSWORD')
@@ -1288,14 +1325,14 @@ describe('App', () => {
     const wrapper = mountAppWithPendingConfig()
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.get('.statusbar').text()).toContain('正在连接本地后端')
+    expect(wrapper.get('[data-testid="backend-dot"]').classes()).toContain('backend-connecting')
   })
 
   it('shows a failed status when initialization cannot register the runtime listener', async () => {
     const wrapper = await mountAppWithListenerFailure()
 
-    expect(wrapper.get('.statusbar').text()).toContain('无法连接本地后端')
-    expect(wrapper.get('.statusbar').text()).not.toContain('无法连接本地后端。')
+    expect(wrapper.get('[data-testid="backend-dot"]').classes()).toContain('backend-failed')
+    expect(wrapper.get('[data-testid="backend-dot"]').attributes('aria-label')).toBe('无法连接本地后端')
   })
 
   it('opens an application confirmation dialog before deleting a forwarding rule', async () => {

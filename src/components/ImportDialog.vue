@@ -5,7 +5,36 @@ const props = defineProps<{ open: boolean; mode: 'import' | 'export'; exportJson
 const emit = defineEmits<{ close: []; confirm: [json: string, replaceAll: boolean] }>()
 const json = ref('')
 const { t } = injectI18n()
+const DEMO_JSON = `{
+  "schemaVersion": 1,
+  "groups": [
+    { "id": "00000000-0000-4000-8000-000000000001", "name": "Demo group" }
+  ],
+  "sessions": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "groupId": "00000000-0000-4000-8000-000000000001",
+      "name": "Demo SSH session",
+      "host": "ssh.example.com",
+      "port": 22,
+      "user": "root",
+      "auth": { "kind": "password" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "sessionId": "00000000-0000-4000-8000-000000000002",
+      "enabled": true,
+      "localPort": 5432,
+      "targetHost": "localhost",
+      "targetPort": 5432,
+      "note": "Demo rule"
+    }
+  ]
+}`
+function fillExample() { json.value = DEMO_JSON }
 watch(() => props.exportJson, (value) => { json.value = value ?? '' }, { immediate: true })
 </script>
-<template><div v-if="open" class="backdrop" role="dialog" aria-modal="true" :aria-label="mode === 'import' ? t('dialog.import.title') : t('dialog.export.title')"><section class="dialog"><h2>{{ mode === 'import' ? t('dialog.import.title') : t('dialog.export.title') }}</h2><p v-if="mode==='export'">{{ t('dialog.export.description') }}</p><p v-else>{{ t('dialog.import.description') }}</p><textarea v-model="json" :readonly="mode==='export'" :placeholder="mode==='import' ? t('placeholder.pasteJson') : ''" :aria-label="t('field.configJson')"/><footer><button @click="emit('close')">{{ t('common.cancel') }}</button><button v-if="mode==='import'" :disabled="!json.trim()" @click="emit('confirm',json,false)">{{ t('action.mergeImport') }}</button><button v-if="mode==='import'" class="danger" :disabled="!json.trim()" @click="emit('confirm',json,true)">{{ t('action.replaceAll') }}</button><button v-else class="primary" @click="emit('confirm',json,false)">{{ t('action.copyJson') }}</button></footer></section></div></template>
-<style scoped>.backdrop{position:fixed;inset:0;display:grid;place-items:center;background:#0008;z-index:10}.dialog{width:min(460px,calc(100vw - 32px));border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:20px;box-shadow:0 22px 80px #0008}.dialog h2{margin:0;font-size:16px}.dialog p{color:var(--muted);font-size:13px;line-height:1.6}.dialog textarea{width:100%;min-height:160px;border:1px solid var(--line);border-radius:6px;background:var(--canvas);padding:8px;color:var(--text);font:12px ui-monospace,monospace;resize:vertical}.dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.dialog button{border:1px solid var(--line);border-radius:6px;background:var(--surface-raised);padding:7px 10px;color:var(--text);cursor:pointer}.dialog .primary{background:#1f6feb}.dialog .danger{border-color:#f8514970;color:#ff7b72}</style>
+<template><div v-if="open" class="backdrop" role="dialog" aria-modal="true" :aria-label="mode === 'import' ? t('dialog.import.title') : t('dialog.export.title')"><section class="dialog"><h2>{{ mode === 'import' ? t('dialog.import.title') : t('dialog.export.title') }}</h2><p v-if="mode==='export'">{{ t('dialog.export.description') }}</p><p v-else>{{ t('dialog.import.description') }}</p><textarea v-model="json" :readonly="mode==='export'" :placeholder="mode==='import' ? t('placeholder.pasteJson') : ''" :aria-label="t('field.configJson')"/><footer><button v-if="mode==='import'" class="fill-example" @click="fillExample">{{ t('action.fillExample') }}</button><button @click="emit('close')">{{ t('common.cancel') }}</button><button v-if="mode==='import'" :disabled="!json.trim()" @click="emit('confirm',json,false)">{{ t('action.mergeImport') }}</button><button v-if="mode==='import'" class="danger" :disabled="!json.trim()" @click="emit('confirm',json,true)">{{ t('action.replaceAll') }}</button><button v-else class="primary" @click="emit('confirm',json,false)">{{ t('action.copyJson') }}</button></footer></section></div></template>
+<style scoped>.backdrop{position:fixed;inset:0;display:grid;place-items:center;background:#0008;z-index:10}.dialog{width:min(460px,calc(100vw - 32px));border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:20px;box-shadow:0 22px 80px #0008}.dialog h2{margin:0;font-size:16px}.dialog p{color:var(--muted);font-size:13px;line-height:1.6}.dialog textarea{width:100%;min-height:160px;border:1px solid var(--line);border-radius:6px;background:var(--canvas);padding:8px;color:var(--text);font:12px ui-monospace,monospace;resize:vertical}.dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.dialog .fill-example{margin-right:auto}.dialog button{border:1px solid var(--line);border-radius:6px;background:var(--surface-raised);padding:7px 10px;color:var(--text);cursor:pointer}.dialog .primary{background:#1f6feb}.dialog .danger{border-color:#f8514970;color:#ff7b72}</style>

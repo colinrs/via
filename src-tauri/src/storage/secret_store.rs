@@ -880,7 +880,9 @@ mod tests {
     use std::panic::{AssertUnwindSafe, catch_unwind};
     use std::{sync::mpsc, time::Duration};
 
-    fn metadata_snapshot(path: &Path) -> (i64, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
+    type MetadataSnapshot = (i64, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>);
+
+    fn metadata_snapshot(path: &Path) -> MetadataSnapshot {
         Connection::open(path)
             .unwrap()
             .query_row(

@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
 import type { Group, LocalForwardRule, SessionConfig, TunnelState } from '../types/via'
+import { isTunnelState } from '../types/via'
 
 export interface ViaBridge {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>
@@ -11,6 +12,7 @@ export interface ViaBridge {
 
 export interface RuntimeSnapshot {
   rules: Array<{ ruleId: string; state: TunnelState; message: string | null }>
+  connectedSessionIds: string[]
 }
 
 export interface PersistedConfig {
@@ -32,12 +34,35 @@ const defaultPreferences: AppPreferences = {
   theme: 'system',
 }
 
+function parseRuntimeSnapshot(value: unknown): RuntimeSnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  if (!Array.isArray(record.rules)) return null
+  const rules: RuntimeSnapshot['rules'] = []
+  for (const item of record.rules) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+    const entry = item as Record<string, unknown>
+    if (typeof entry.ruleId !== 'string' || typeof entry.state !== 'string' || !isTunnelState(entry.state)) return null
+    if (entry.message !== undefined && entry.message !== null && typeof entry.message !== 'string') return null
+    rules.push({
+      ruleId: entry.ruleId,
+      state: entry.state,
+      message: typeof entry.message === 'string' ? entry.message : null,
+    })
+  }
+  const connected = record.connectedSessionIds
+  if (connected !== undefined && !Array.isArray(connected)) return null
+  const connectedSessionIds = (connected ?? []).filter((id): id is string => typeof id === 'string')
+  return { rules, connectedSessionIds }
+}
+
 export type InitializationState = 'idle' | 'connecting' | 'ready' | 'failed'
 
 export interface ViaStore {
   groups: Group[]
   sessions: SessionConfig[]
   rules: LocalForwardRule[]
+  connectedSessionIds: string[]
   initialized: boolean
   initializationState: InitializationState
   secretStoreConfigured: boolean | null
@@ -82,6 +107,7 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
     groups: [] as Group[],
     sessions: [] as SessionConfig[],
     rules: [] as LocalForwardRule[],
+    connectedSessionIds: [] as string[],
     initialized: false,
     initializationState: 'idle' as InitializationState,
     secretStoreConfigured: null as boolean | null,
@@ -96,7 +122,7 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
   const replaceConfig = (config: PersistedConfig) => {
     replace(state.groups, config.groups)
     replace(state.sessions, config.sessions)
-    replace(state.rules, config.rules)
+    replace(state.rules, config.rules.map((rule) => ({ ...rule, runtimeState: rule.runtimeState ?? 'stopped' })))
   }
   const validateRecoveryCodes = (value: unknown): string[] => {
     if (!Array.isArray(value)
@@ -160,8 +186,11 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
         replaceConfig(config)
         await refreshSecretStoreStatus()
         if (!unsubscribe) {
-          unsubscribe = await runtime.listen<RuntimeSnapshot>('runtime-state', (runtime) => {
-            for (const update of runtime.rules) {
+          unsubscribe = await runtime.listen<unknown>('runtime-state', (payload) => {
+            const snapshot = parseRuntimeSnapshot(payload)
+            if (!snapshot) return
+            state.connectedSessionIds = snapshot.connectedSessionIds
+            for (const update of snapshot.rules) {
               const rule = state.rules.find((item) => item.id === update.ruleId)
               if (rule) {
                 rule.runtimeState = update.state

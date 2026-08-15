@@ -1,6 +1,23 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createViaStore, type ViaBridge } from './via'
 
+async function storeWithRuntimeHandler(rules: Array<{ id: string; sessionId: string; enabled: boolean; localPort: number; targetHost: string; targetPort: number; note: string; runtimeState?: string }>) {
+  let runtimeHandler: ((payload: unknown) => void) | undefined
+  const config = { schemaVersion: 1, groups: [], sessions: [], rules }
+  const invoke = vi.fn().mockImplementation((command: string) => command === 'load_config'
+    ? Promise.resolve(config)
+    : command === 'secret_store_status' ? Promise.resolve({ configured: true }) : Promise.resolve())
+  const store = createViaStore({
+    invoke,
+    listen: vi.fn().mockImplementation((_event: string, handler: (payload: unknown) => void) => {
+      runtimeHandler = handler
+      return Promise.resolve(() => {})
+    }),
+  } as ViaBridge)
+  await store.initialize()
+  return { store, fire: (payload: unknown) => runtimeHandler?.(payload) }
+}
+
 describe('ViaStore', () => {
   const emptyConfig = { schemaVersion: 1, groups: [], sessions: [], rules: [] }
   const tenCodes = Array.from({ length: 10 }, (_, index) => `CODE-${index + 1}`)
@@ -346,5 +363,53 @@ describe('ViaStore', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     expect(invoke).toHaveBeenCalledWith('connect_session', { sessionId: 's' })
     vi.useRealTimers()
+  })
+
+  it('applies a well-formed runtime snapshot to rules and connection state', async () => {
+    const { store, fire } = await storeWithRuntimeHandler([
+      { id: 'rule-a', sessionId: 'session-a', enabled: true, localPort: 1, targetHost: 'h', targetPort: 1, note: '' },
+    ])
+
+    fire({ rules: [{ ruleId: 'rule-a', state: 'active', message: null }], connectedSessionIds: ['session-a'] })
+
+    expect(store.rules[0].runtimeState).toBe('active')
+    expect(store.connectedSessionIds).toEqual(['session-a'])
+  })
+
+  it('ignores malformed runtime snapshots without mutating state', async () => {
+    const invalidPayloads: unknown[] = [
+      null,
+      [{ ruleId: 'rule-a', state: 'active', message: null }],
+      { rules: 'not-an-array', connectedSessionIds: [] },
+      { rules: [null] },
+      { rules: [{ state: 'active', message: null }] },
+      { rules: [{ ruleId: 'rule-a', state: 'dynamic', message: null }] },
+      { rules: [{ ruleId: 'rule-a', state: 'active', message: 42 }] },
+      { rules: [], connectedSessionIds: 'not-an-array' },
+    ]
+    for (const payload of invalidPayloads) {
+      const { store, fire } = await storeWithRuntimeHandler([
+        { id: 'rule-a', sessionId: 'session-a', enabled: true, localPort: 1, targetHost: 'h', targetPort: 1, note: '' },
+      ])
+      fire(payload)
+      expect(store.rules[0].runtimeState).toBe('stopped')
+      expect(store.connectedSessionIds).toEqual([])
+    }
+  })
+
+  it('defaults a loaded rule runtimeState to stopped when the backend omits it', async () => {
+    const invoke = vi.fn().mockImplementation((command: string) => command === 'load_config'
+      ? Promise.resolve({
+          schemaVersion: 1,
+          groups: [],
+          sessions: [],
+          rules: [{ id: 'rule-a', sessionId: 'session-a', enabled: true, localPort: 1, targetHost: 'h', targetPort: 1, note: '' }],
+        })
+      : command === 'secret_store_status' ? Promise.resolve({ configured: true }) : Promise.resolve())
+    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+
+    await store.initialize()
+
+    expect(store.rules[0].runtimeState).toBe('stopped')
   })
 })

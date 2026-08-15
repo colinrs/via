@@ -804,6 +804,24 @@ describe('App', () => {
     expect(invoke).toHaveBeenCalledWith('save_session_secret', { sessionId: 'session-a', secret: 'key passphrase' })
   })
 
+  it('allows entering and persists a private-key file path', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      rules: [],
+    })
+
+    const privateKeyInput = wrapper.get('[aria-label="私钥文件"]')
+    expect(privateKeyInput.attributes('readonly')).toBeUndefined()
+
+    await privateKeyInput.setValue('/Users/me/.ssh/id_ed25519')
+    await privateKeyInput.trigger('change')
+    await flushPromises()
+
+    const savedAuth = invoke.mock.calls.filter(([command]) => command === 'save_config').at(-1)![1].config.sessions[0].auth
+    expect(savedAuth).toEqual({ kind: 'private_key', path: '/Users/me/.ssh/id_ed25519', passphraseSecretId: null })
+  })
+
   it('offers exactly password and private-key authentication modes', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],

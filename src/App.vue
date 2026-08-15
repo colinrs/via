@@ -554,7 +554,7 @@ onBeforeUnmount(() => {
               <label class="authentication-field">{{ t('field.sshPassword') }}<input v-model="passwordDraft" :aria-label="t('field.sshPassword')" type="password" autocomplete="new-password" /></label>
             </template>
             <template v-else>
-              <label class="authentication-field">{{ t('field.privateKeyFile') }}<input :value="selectedSession.auth.path" :aria-label="t('field.privateKeyFile')" readonly /></label>
+              <label class="authentication-field">{{ t('field.privateKeyFile') }}<input v-model="selectedSession.auth.path" :aria-label="t('field.privateKeyFile')" @change="persist" /></label>
               <button data-testid="choose-private-key" class="secondary-button" type="button" :disabled="authenticationControlsBusy" @click="choosePrivateKey">{{ t('action.choosePrivateKey') }}</button>
               <label class="authentication-field">{{ t('field.privateKeyPassphrase') }}<input v-model="passphraseDraft" :aria-label="t('field.privateKeyPassphrase')" type="password" autocomplete="new-password" /></label>
             </template>

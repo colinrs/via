@@ -187,6 +187,23 @@ async fn snapshot_omits_disconnected_sessions() {
     );
 }
 
+#[tokio::test]
+async fn snapshot_serializes_connected_session_ids_as_camel_case() {
+    let manager = TunnelManager::new();
+    let session_id = uuid::Uuid::new_v4();
+    manager
+        .register_session(session_id, Arc::new(EchoSession))
+        .await;
+
+    let value = serde_json::to_value(manager.snapshot().await).unwrap();
+
+    assert_eq!(
+        value["connectedSessionIds"],
+        serde_json::json!([session_id.to_string()])
+    );
+    assert!(value.get("connected_session_ids").is_none());
+}
+
 fn rule(session_id: uuid::Uuid, port: u16) -> LocalForwardRule {
     LocalForwardRule::new(
         uuid::Uuid::new_v4(),

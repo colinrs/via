@@ -55,6 +55,8 @@ const deleteSessionOpen = ref(false)
 const sessionDeletionBusy = ref(false)
 const pendingRuleId = ref<string | null>(null)
 const ruleDeletionBusy = ref(false)
+const sessionBusy = ref<'connect' | 'disconnect' | 'reconnect' | null>(null)
+const bulkRulesBusy = ref(false)
 interface GroupDeletionScope {
   id: string
   sessionIds: string[]
@@ -92,6 +94,9 @@ const selectedSession = computed(() => store.sessions.find((session) => session.
 const currentRules = computed(() => store.rules.filter((rule) => rule.sessionId === selectedSessionId.value))
 const activeCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'active').length)
 const errorCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'conflict' || rule.runtimeState === 'failed').length)
+const isConnected = computed(() => !!selectedSessionId.value
+  && store.connectedSessionIds.includes(selectedSessionId.value))
+const bulkOperationsBusy = computed(() => bulkRulesBusy.value || sessionBusy.value !== null)
 const authenticationBusy = computed(() => authenticationSaving.value || authenticationPicking.value)
 const authenticationControlsBusy = computed(() => authenticationBusy.value || configurationSaving.value)
 const setupOpen = computed(() => preferencesReady.value
@@ -306,16 +311,80 @@ async function removeRule() {
     ruleDeletionBusy.value = false
   }
 }
-async function startAll() { if (selectedSessionId.value) await store.startEnabledRules(selectedSessionId.value) }
-async function stopAll() { if (selectedSessionId.value) await store.stopSessionRules(selectedSessionId.value) }
+function applyConnectFailure(error: unknown) {
+  hostTrust.value = hostTrustRequest(error)
+  const value = String(error)
+  statusError.value = hostTrust.value ? null : value.includes('HostKeyChanged') ? 'error.hostKeyChanged' : 'error.connect'
+}
+async function connect() {
+  if (!selectedSessionId.value || sessionBusy.value) return
+  sessionBusy.value = 'connect'
+  try {
+    await store.connectSession(selectedSessionId.value)
+    await store.startEnabledRules(selectedSessionId.value)
+    statusError.value = null
+  } catch (error) {
+    applyConnectFailure(error)
+  } finally {
+    sessionBusy.value = null
+  }
+}
+async function disconnect() {
+  if (!selectedSessionId.value || sessionBusy.value) return
+  sessionBusy.value = 'disconnect'
+  try {
+    await store.disconnectSession(selectedSessionId.value)
+    statusError.value = null
+  } catch {
+    statusError.value = 'error.disconnect'
+  } finally {
+    sessionBusy.value = null
+  }
+}
+async function reconnect() {
+  if (!selectedSessionId.value || sessionBusy.value) return
+  sessionBusy.value = 'reconnect'
+  try {
+    await store.disconnectSession(selectedSessionId.value)
+    await store.connectSession(selectedSessionId.value)
+    await store.startEnabledRules(selectedSessionId.value)
+    statusError.value = null
+  } catch (error) {
+    applyConnectFailure(error)
+  } finally {
+    sessionBusy.value = null
+  }
+}
+async function startAll() {
+  if (!selectedSessionId.value || bulkRulesBusy.value) return
+  bulkRulesBusy.value = true
+  try {
+    await store.startEnabledRules(selectedSessionId.value)
+    statusError.value = null
+  } catch {
+    statusError.value = 'error.ruleOperation'
+  } finally {
+    bulkRulesBusy.value = false
+  }
+}
+async function stopAll() {
+  if (!selectedSessionId.value || bulkRulesBusy.value) return
+  bulkRulesBusy.value = true
+  try {
+    await store.stopSessionRules(selectedSessionId.value)
+    statusError.value = null
+  } catch {
+    statusError.value = 'error.ruleOperation'
+  } finally {
+    bulkRulesBusy.value = false
+  }
+}
 function hostTrustRequest(error: unknown) {
   const value = String(error)
   const match = /HostTrustRequired \{ host: "([^"]+)", port: (\d+), algorithm: "([^"]+)", fingerprint: "([^"]+)" \}/.exec(value)
   return match ? { host: match[1], port: Number(match[2]), algorithm: match[3], fingerprint: match[4] } : null
 }
-async function connect() { if (!selectedSessionId.value) return; try { await store.connectSession(selectedSessionId.value); await startAll() } catch (error) { hostTrust.value = hostTrustRequest(error); const value = String(error); statusError.value = hostTrust.value ? null : value.includes('HostKeyChanged') ? 'error.hostKeyChanged' : 'error.connect' } }
 async function approveHostTrust() { if (!hostTrust.value) return; const request = hostTrust.value; try { await store.approveHostKey(request.host, request.port, request.algorithm, request.fingerprint); hostTrust.value = null; await connect() } catch { statusError.value = 'error.saveHostTrust' } }
-async function disconnect() { if (selectedSessionId.value) await store.disconnectSession(selectedSessionId.value) }
 async function initializeSecrets(password: string) {
   if (secretOperationBusy.value || !setupOpen.value || recoveryCodes.value.length > 0) return
   secretOperationBusy.value = true
@@ -538,10 +607,10 @@ onBeforeUnmount(() => {
       <SessionSidebar :groups="groups" :selected-session-id="selectedSessionId ?? ''" @select="selectedSessionId = $event" @create="requestCreateSession" @create-group="createGroupOpen=true" @delete-group="requestRemoveGroup" />
       <section v-if="selectedSession" class="content">
         <header class="session-header">
-          <div><p class="section-label">{{ t('title.session') }}</p><h1>{{ selectedSession.name }}</h1><p class="connection"><span class="live-dot" />{{ selectedSession.user }}@{{ selectedSession.host || t('message.unconfiguredHost') }}:{{ selectedSession.port }}</p></div>
-          <div class="header-actions"><button class="success-button" type="button" @click="connect">{{ t('action.connectAndStart') }}</button><button class="danger-button" type="button" @click="disconnect">{{ t('action.disconnect') }}</button><button class="secondary-button" type="button" @click="startAll">{{ t('action.reconnectTunnels') }}</button><button class="danger-button" type="button" @click="requestRemoveSession">{{ t('action.deleteSession') }}</button></div>
+          <div><p class="section-label">{{ t('title.session') }}</p><h1>{{ selectedSession.name }}</h1><p class="connection"><span class="session-dot" :class="{ connected: isConnected }" />{{ selectedSession.user }}@{{ selectedSession.host || t('message.unconfiguredHost') }}:{{ selectedSession.port }}<span class="connection-state" :class="{ connected: isConnected }">{{ t(isConnected ? 'state.connected' : 'state.disconnected') }}</span></p></div>
+          <div class="header-actions"><button class="success-button" type="button" :disabled="sessionBusy !== null || isConnected" @click="connect">{{ sessionBusy === 'connect' ? t('common.inProgress', { action: t('action.connectAndStart') }) : t('action.connectAndStart') }}</button><button class="danger-button" type="button" :disabled="sessionBusy !== null || !isConnected" @click="disconnect">{{ sessionBusy === 'disconnect' ? t('common.inProgress', { action: t('action.disconnect') }) : t('action.disconnect') }}</button><button class="secondary-button" type="button" :disabled="sessionBusy !== null" @click="reconnect">{{ sessionBusy === 'reconnect' ? t('common.inProgress', { action: t('action.reconnectTunnels') }) : t('action.reconnectTunnels') }}</button><button class="danger-button" type="button" @click="requestRemoveSession">{{ t('action.deleteSession') }}</button></div>
         </header>
-        <TunnelGrid :rules="currentRules" @add="addRule" @update="updateRule" @toggle="toggleRule" @remove="requestRemoveRule" @clone="cloneRule" @start-all="startAll" @stop-all="stopAll" />
+        <TunnelGrid :rules="currentRules" :bulk-busy="bulkOperationsBusy" :session-connected="isConnected" @add="addRule" @update="updateRule" @toggle="toggleRule" @remove="requestRemoveRule" @clone="cloneRule" @start-all="startAll" @stop-all="stopAll" />
         <section class="session-editor">
           <div class="editor-title"><span aria-hidden="true">▤</span> {{ t('title.currentSessionConfig') }}</div>
           <div class="editor-fields">
@@ -581,5 +650,5 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-:root { color: #e6edf3; background: #0d1117; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --canvas: #0d1117; --surface: #161b22; --surface-raised: #21262d; --line: #30363d; --text: #e6edf3; --muted: #8b949e; --blue: #388bfd; --green: #3fb950; --red: #f85149; --yellow: #d29922; } * { box-sizing: border-box; } body { margin: 0; min-width: 980px; } button,input,select { font: inherit; } .via-app { display: flex; min-height: 100vh; flex-direction: column; background: var(--canvas); }.app-interactions { display: flex; min-width: 0; min-height: 100vh; flex: 1; flex-direction: column; margin: 0; border: 0; padding: 0; }.titlebar { display: flex; height: 48px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface); padding: 0 17px; }.brand,.title-actions,.header-actions { display: flex; align-items: center; gap: 10px; }.brand { font-size: 14px; font-weight: 750; }.mark { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 6px; background: var(--blue); color: white; font-size: 12px; }.version { border: 1px solid rgb(56 139 253 / 35%); border-radius: 4px; background: rgb(56 139 253 / 10%); padding: 2px 5px; color: #79c0ff; font-size: 10px; font-weight: 600; }.title-actions button,.secondary-button,.success-button,.danger-button { border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); padding: 7px 10px; color: var(--text); font-size: 12px; cursor: pointer; }.title-actions button:hover,.secondary-button:hover { border-color: var(--muted); }.primary-button { border: 1px solid #4696fa; border-radius: 6px; background: #1f6feb; padding: 7px 10px; color: white; font-size: 12px; font-weight: 650; cursor: pointer; }.primary-button:hover { background: #388bfd; }.success-button { border-color: rgb(63 185 80 / 35%); background: rgb(63 185 80 / 10%); color: #56d364; }.danger-button { border-color: rgb(248 81 73 / 35%); background: rgb(248 81 73 / 8%); color: #ff7b72; }.workspace { display: flex; min-height: 0; flex: 1; }.content { display: flex; min-width: 0; flex: 1; flex-direction: column; }.session-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface); padding: 17px 20px; }.section-label { margin: 0 0 4px; color: var(--blue); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }.session-header h1 { margin: 0; font-size: 16px; }.connection { display: flex; align-items: center; gap: 6px; margin: 5px 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 7px var(--green); }.connected { color: #56d364; font-size: 12px; }.session-editor { border-top: 1px solid var(--line); background: var(--surface); padding: 14px 20px 17px; }.editor-title { margin-bottom: 11px; color: var(--muted); font-size: 12px; font-weight: 700; }.editor-fields { display: grid; grid-template-columns: 1fr 1.3fr 90px 1fr 1.5fr; gap: 12px; }.editor-fields label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }.editor-fields input,.editor-fields select { min-width: 0; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: var(--canvas); padding: 7px 8px; color: var(--text); font-size: 12px; }.editor-fields input:focus,.editor-fields select:focus { border-color: var(--blue); }.editor-fields > button { align-self: end; }.statusbar { display: flex; height: 26px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding: 0 17px; color: var(--muted); font-size: 11px; }.statusbar span { display: flex; align-items: center; gap: 6px; } @media (max-width: 1100px) { .editor-fields { grid-template-columns: repeat(2, 1fr); }.key-path { grid-column: span 2; } }
+:root { color: #e6edf3; background: #0d1117; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --canvas: #0d1117; --surface: #161b22; --surface-raised: #21262d; --line: #30363d; --text: #e6edf3; --muted: #8b949e; --blue: #388bfd; --green: #3fb950; --red: #f85149; --yellow: #d29922; } * { box-sizing: border-box; } body { margin: 0; min-width: 980px; } button,input,select { font: inherit; } .via-app { display: flex; min-height: 100vh; flex-direction: column; background: var(--canvas); }.app-interactions { display: flex; min-width: 0; min-height: 100vh; flex: 1; flex-direction: column; margin: 0; border: 0; padding: 0; }.titlebar { display: flex; height: 48px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface); padding: 0 17px; }.brand,.title-actions,.header-actions { display: flex; align-items: center; gap: 10px; }.brand { font-size: 14px; font-weight: 750; }.mark { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 6px; background: var(--blue); color: white; font-size: 12px; }.version { border: 1px solid rgb(56 139 253 / 35%); border-radius: 4px; background: rgb(56 139 253 / 10%); padding: 2px 5px; color: #79c0ff; font-size: 10px; font-weight: 600; }.title-actions button,.secondary-button,.success-button,.danger-button { border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); padding: 7px 10px; color: var(--text); font-size: 12px; cursor: pointer; }.title-actions button:hover,.secondary-button:hover { border-color: var(--muted); }.primary-button { border: 1px solid #4696fa; border-radius: 6px; background: #1f6feb; padding: 7px 10px; color: white; font-size: 12px; font-weight: 650; cursor: pointer; }.primary-button:hover { background: #388bfd; }.success-button { border-color: rgb(63 185 80 / 35%); background: rgb(63 185 80 / 10%); color: #56d364; }.danger-button { border-color: rgb(248 81 73 / 35%); background: rgb(248 81 73 / 8%); color: #ff7b72; }.workspace { display: flex; min-height: 0; flex: 1; }.content { display: flex; min-width: 0; flex: 1; flex-direction: column; }.session-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface); padding: 17px 20px; }.section-label { margin: 0 0 4px; color: var(--blue); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }.session-header h1 { margin: 0; font-size: 16px; }.connection { display: flex; align-items: center; gap: 6px; margin: 5px 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 7px var(--green); }.connected { color: #56d364; font-size: 12px; }.session-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }.session-dot.connected { background: var(--green); box-shadow: 0 0 7px var(--green); }.connection-state { margin-left: 8px; color: var(--muted); }.connection-state.connected { color: var(--green); }button:disabled { opacity: .55; cursor: not-allowed; }.session-editor { border-top: 1px solid var(--line); background: var(--surface); padding: 14px 20px 17px; }.editor-title { margin-bottom: 11px; color: var(--muted); font-size: 12px; font-weight: 700; }.editor-fields { display: grid; grid-template-columns: 1fr 1.3fr 90px 1fr 1.5fr; gap: 12px; }.editor-fields label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }.editor-fields input,.editor-fields select { min-width: 0; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: var(--canvas); padding: 7px 8px; color: var(--text); font-size: 12px; }.editor-fields input:focus,.editor-fields select:focus { border-color: var(--blue); }.editor-fields > button { align-self: end; }.statusbar { display: flex; height: 26px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding: 0 17px; color: var(--muted); font-size: 11px; }.statusbar span { display: flex; align-items: center; gap: 6px; } @media (max-width: 1100px) { .editor-fields { grid-template-columns: repeat(2, 1fr); }.key-path { grid-column: span 2; } }
 </style>

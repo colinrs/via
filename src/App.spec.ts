@@ -1707,4 +1707,81 @@ describe('App', () => {
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除 SSH 会话')
     expect(wrapper.get('.session-header h1').text()).toBe('会话 session-a')
   })
+
+  it('shows the session as disconnected and disables disconnect before connecting', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    })
+
+    const disconnect = wrapper.findAll('button').find((button) => button.text() === '断开连接')!
+    expect(disconnect.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.connection').text()).toContain('未连接')
+  })
+
+  it('marks the session connected and disables connect after a runtime update', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    })
+    const runtimeListener = listen.mock.calls.at(-1)![1]
+    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    await wrapper.vm.$nextTick()
+
+    const connect = wrapper.findAll('button').find((button) => button.text() === '连接并启动')!
+    expect(connect.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.connection').text()).toContain('已连接')
+  })
+
+  it('reports a specific error when disconnecting a connected session fails', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    }, [], { disconnect_session: async () => { throw new Error('disconnect failed') } })
+    const runtimeListener = listen.mock.calls.at(-1)![1]
+    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    await wrapper.vm.$nextTick()
+
+    await wrapper.findAll('button').find((button) => button.text() === '断开连接')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.statusbar').text()).toContain('断开连接失败，请重试。')
+  })
+
+  it('rebuilds the connection when reconnect tunnels is pressed', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    })
+    const callsBefore = invoke.mock.calls.length
+
+    await wrapper.findAll('button').find((button) => button.text().includes('重连隧道'))!.trigger('click')
+    await flushPromises()
+
+    expect(invoke.mock.calls.slice(callsBefore).map(([command]) => command)).toEqual([
+      'disconnect_session',
+      'connect_session',
+      'start_enabled_rules',
+    ])
+  })
+
+  it('shows an in-progress label on connect while it is pending', async () => {
+    const pendingConnect = deferred()
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    }, [], { connect_session: () => pendingConnect.promise })
+    await wrapper.findAll('button').find((button) => button.text() === '连接并启动')!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.findAll('button').some((button) => button.text().includes('连接并启动中'))).toBe(true)
+
+    pendingConnect.resolve()
+    await flushPromises()
+  })
 })

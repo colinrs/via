@@ -37,5 +37,17 @@ watch(
 </template>
 
 <style scoped>
-.backdrop{position:fixed;inset:0;display:grid;place-items:center;background:#0008;z-index:20}.dialog{width:min(400px,calc(100vw - 32px));border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface);padding:20px;box-shadow:0 22px 80px #0008}.dialog h2{margin:0;font-size:16px}.dialog label{display:grid;gap:6px;margin-top:16px;color:var(--muted);font-size:12px}.dialog select{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--canvas);padding:8px;color:var(--text)}footer{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}button{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-raised);padding:7px 10px;color:var(--text);cursor:pointer}.primary{background:#1f6feb}
+.backdrop { position: fixed; inset: 0; display: grid; place-items: center; background: #0008; z-index: 20; }
+.dialog { width: min(410px, calc(100vw - 32px)); border: 1px solid var(--line); background: var(--content); padding: 20px; box-shadow: 4px 4px 0 rgb(0 0 0 / 30%); }
+.dialog h2 { margin: 0; font-size: 16px; font-family: var(--font-ui); }
+.dialog p { margin: 12px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+footer { display: flex; justify-content: flex-end; gap: 8px; }
+button { border: 1px solid var(--line); background: var(--surface-raised); padding: 7px 10px; color: var(--text); cursor: pointer; box-shadow: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #404040; }
+button:active { box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #ffffff; }
+button:disabled { cursor: wait; opacity: .6; }
+.danger { border: 2px solid var(--line); }
+.dialog label { display: grid; gap: 6px; margin-top: 16px; color: var(--muted); font-size: 12px; }
+.dialog input, .dialog select { border: 1px solid var(--line); background: var(--content); padding: 8px; color: var(--text); box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #ffffff; }
+.primary { border-width: 2px; font-weight: 700; }
+footer { margin-top: 16px; }
 </style>

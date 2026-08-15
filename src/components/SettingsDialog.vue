@@ -134,5 +134,22 @@ watch(() => props.masterPasswordChangedToken, clearPasswords)
 </template>
 
 <style scoped>
-.backdrop{position:fixed;inset:0;display:grid;place-items:center;background:#0008;z-index:20}.dialog{width:min(520px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface);padding:20px;box-shadow:0 22px 80px #0008}.dialog h2{margin:0 0 16px;font-size:18px}fieldset{display:grid;gap:12px;border:1px solid var(--line);border-radius:var(--radius-md);margin:0 0 16px;padding:14px}legend{padding:0 6px;font-size:13px;font-weight:700}label{display:grid;grid-template-columns:minmax(150px,1fr) minmax(180px,1fr);align-items:center;gap:12px;color:var(--muted);font-size:12px}input,select{width:100%;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--canvas);padding:8px;color:var(--text);font:inherit}.about h3{margin:0;font-size:13px}.about p{margin:8px 0;color:var(--muted);font-size:12px;line-height:1.5}.error{color:var(--red);font-size:12px}.primary{justify-self:end;background:#1f6feb}footer{display:flex;justify-content:flex-end;margin-top:16px}button{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-raised);padding:7px 10px;color:var(--text);cursor:pointer}button:disabled{cursor:not-allowed;opacity:.55}@media (max-width:540px){label{grid-template-columns:1fr}}
+.backdrop { position: fixed; inset: 0; display: grid; place-items: center; background: #0008; z-index: 20; }
+.dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; border: 1px solid var(--line); background: var(--content); padding: 20px; box-shadow: 4px 4px 0 rgb(0 0 0 / 30%); }
+.dialog h2 { margin: 0; font-size: 16px; font-family: var(--font-ui); }
+.dialog p { margin: 12px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+footer { display: flex; justify-content: flex-end; gap: 8px; }
+button { border: 1px solid var(--line); background: var(--surface-raised); padding: 7px 10px; color: var(--text); cursor: pointer; box-shadow: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #404040; }
+button:active { box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #ffffff; }
+button:disabled { cursor: wait; opacity: .6; }
+.danger { border: 2px solid var(--line); }
+fieldset { display: grid; gap: 12px; border: 1px solid var(--line); margin: 0 0 16px; padding: 14px; }
+legend { padding: 0 6px; font-size: 13px; font-weight: 700; font-family: var(--font-ui); }
+label { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr); align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+input, select { width: 100%; border: 1px solid var(--line); background: var(--content); padding: 8px; color: var(--text); font: inherit; box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #ffffff; }
+.about h3 { margin: 0; font-size: 13px; font-family: var(--font-ui); }
+.about p { margin: 8px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.error { color: var(--red); font-size: 12px; }
+.primary { justify-self: end; border-width: 2px; font-weight: 700; }
+@media (max-width: 540px) { label { grid-template-columns: 1fr; } }
 </style>

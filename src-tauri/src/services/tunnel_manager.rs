@@ -176,9 +176,12 @@ impl TunnelManager {
         }
     }
     pub async fn snapshot(&self) -> RuntimeSnapshot {
+        let mut connected_session_ids: Vec<uuid::Uuid> =
+            self.sessions.lock().await.keys().copied().collect();
+        connected_session_ids.sort();
         RuntimeSnapshot {
             rules: self.states.lock().await.values().cloned().collect(),
-            connected_session_ids: self.sessions.lock().await.keys().copied().collect(),
+            connected_session_ids,
         }
     }
     async fn set(&self, id: uuid::Uuid, state: TunnelState, message: Option<String>) {

@@ -161,10 +161,12 @@ async fn snapshot_reports_connected_sessions_and_rule_states() {
     let snapshot = manager.snapshot().await;
 
     assert!(snapshot.connected_session_ids.contains(&session_id));
-    assert!(snapshot
-        .rules
-        .iter()
-        .any(|item| item.rule_id == rule.id && item.state == TunnelState::Active));
+    assert!(
+        snapshot
+            .rules
+            .iter()
+            .any(|item| item.rule_id == rule.id && item.state == TunnelState::Active)
+    );
 }
 
 #[tokio::test]
@@ -176,7 +178,13 @@ async fn snapshot_omits_disconnected_sessions() {
         .await;
     manager.disconnect_session(session_id).await;
 
-    assert!(!manager.snapshot().await.connected_session_ids.contains(&session_id));
+    assert!(
+        !manager
+            .snapshot()
+            .await
+            .connected_session_ids
+            .contains(&session_id)
+    );
 }
 
 fn rule(session_id: uuid::Uuid, port: u16) -> LocalForwardRule {

@@ -43,7 +43,7 @@ const stateClass = (state: TunnelState) => `state-${state}`
 const patch = (rule: LocalForwardRule, fields: Partial<LocalForwardRule>) => emit('update', { ...rule, ...fields })
 const onScroll = (event: Event) => { scrollTop.value = (event.target as HTMLElement).scrollTop }
 
-const startAllHint = computed(() => !props.sessionConnected ? t('hint.connectSessionFirst') : props.bulkBusy ? t('hint.operationInProgress') : '')
+const startAllHint = computed(() => props.bulkBusy ? t('hint.operationInProgress') : !props.sessionConnected ? t('hint.connectSessionFirst') : '')
 const stopAllHint = computed(() => props.bulkBusy ? t('hint.operationInProgress') : '')
 </script>
 
@@ -52,8 +52,8 @@ const stopAllHint = computed(() => props.bulkBusy ? t('hint.operationInProgress'
     <div class="toolbar">
       <div class="toolbar-actions">
         <button class="primary-button" type="button" @click="emit('add')">{{ t('action.addRule') }}</button>
-        <span class="button-wrap" :title="startAllHint"><button class="success-button" type="button" :disabled="bulkBusy || !sessionConnected" @click="emit('startAll')">{{ t('action.startAll') }}</button></span>
-        <span v-if="rules.some((rule) => rule.runtimeState !== 'stopped')" class="button-wrap" :title="stopAllHint"><button class="secondary-button" type="button" :disabled="bulkBusy" @click="emit('stopAll')">{{ t('action.stopAll') }}</button></span>
+        <span class="button-wrap" :title="startAllHint || undefined"><button class="success-button" type="button" :aria-description="startAllHint || undefined" :disabled="bulkBusy || !sessionConnected" @click="emit('startAll')">{{ t('action.startAll') }}</button></span>
+        <span v-if="rules.some((rule) => rule.runtimeState !== 'stopped')" class="button-wrap" :title="stopAllHint || undefined"><button class="secondary-button" type="button" :aria-description="stopAllHint || undefined" :disabled="bulkBusy" @click="emit('stopAll')">{{ t('action.stopAll') }}</button></span>
       </div>
       <label class="search"><span aria-hidden="true">⌕</span><input v-model="query" :placeholder="t('placeholder.searchRules')" /></label>
     </div>
@@ -80,7 +80,7 @@ const stopAllHint = computed(() => props.bulkBusy ? t('hint.operationInProgress'
 </template>
 
 <style scoped>
-.button-wrap { display: inline-flex; }
+.button-wrap { display: inline-flex; } /* standalone-mount parity with App.vue's global rule */
 .grid-section { display: flex; min-height: 0; flex: 1; flex-direction: column; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); padding: 12px 18px; }.toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; }.search { display: flex; width: min(310px, 100%); align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 0 9px; color: var(--muted); }.search input { border: 0; padding: 7px 0; }
 .table-scroll { min-height: 0; overflow: auto; padding: 18px; } table { width: 100%; min-width: 830px; border: 1px solid var(--line); border-spacing: 0; border-radius: 8px; overflow: hidden; background: rgb(22 27 34 / 55%); } tbody { display: table-row-group; } th { border-bottom: 1px solid var(--line); padding: 11px 12px; color: var(--muted); background: var(--surface); text-align: left; font-size: 11px; font-weight: 650; } td { height: 46px; border-bottom: 1px solid rgb(48 54 61 / 70%); padding: 8px 10px; } tr:last-child td { border-bottom: 0; } tr:hover { background: rgb(48 54 61 / 28%); } tr.conflict { background: rgb(248 81 73 / 7%); }.center { text-align: center; }

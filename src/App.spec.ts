@@ -1859,4 +1859,36 @@ describe('App', () => {
     pendingDisconnect.resolve()
     await flushPromises()
   })
+
+  it('prioritizes the in-progress hint when connected and a session operation is pending', async () => {
+    const pendingDisconnect = deferred()
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    }, [], { disconnect_session: () => pendingDisconnect.promise })
+    const runtimeListener = listen.mock.calls.at(-1)![1]
+    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    await wrapper.vm.$nextTick()
+
+    await wrapper.findAll('button').find((button) => button.text() === '断开连接')!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const connect = wrapper.findAll('button').find((button) => button.text() === '连接并启动')!
+    expect(connect.element.parentElement?.getAttribute('title')).toBe('操作进行中，请稍候')
+    pendingDisconnect.resolve()
+    await flushPromises()
+  })
+
+  it('exposes the hint via aria-description and omits an empty title when enabled', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    })
+    const disconnect = wrapper.findAll('button').find((button) => button.text() === '断开连接')!
+    expect(disconnect.attributes('aria-description')).toBe('会话未连接')
+    const connect = wrapper.findAll('button').find((button) => button.text() === '连接并启动')!
+    expect(connect.element.parentElement?.hasAttribute('title')).toBe(false)
+  })
 })

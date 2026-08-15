@@ -97,12 +97,12 @@ const errorCount = computed(() => store.rules.filter((rule) => rule.runtimeState
 const isConnected = computed(() => !!selectedSessionId.value
   && store.connectedSessionIds.includes(selectedSessionId.value))
 const bulkOperationsBusy = computed(() => bulkRulesBusy.value || sessionBusy.value !== null)
-const connectHint = computed(() => isConnected.value
-  ? t('hint.sessionConnected')
-  : sessionBusy.value ? t('hint.operationInProgress') : '')
-const disconnectHint = computed(() => !isConnected.value
-  ? t('hint.sessionNotConnected')
-  : sessionBusy.value ? t('hint.operationInProgress') : '')
+const connectHint = computed(() => sessionBusy.value
+  ? t('hint.operationInProgress')
+  : isConnected.value ? t('hint.sessionConnected') : '')
+const disconnectHint = computed(() => sessionBusy.value
+  ? t('hint.operationInProgress')
+  : !isConnected.value ? t('hint.sessionNotConnected') : '')
 const reconnectHint = computed(() => sessionBusy.value ? t('hint.operationInProgress') : '')
 const authenticationBusy = computed(() => authenticationSaving.value || authenticationPicking.value)
 const authenticationControlsBusy = computed(() => authenticationBusy.value || configurationSaving.value)
@@ -614,7 +614,7 @@ onBeforeUnmount(() => {
       <section v-if="selectedSession" class="content">
         <header class="session-header">
           <div><p class="section-label">{{ t('title.session') }}</p><h1>{{ selectedSession.name }}</h1><p class="connection"><span class="session-dot" :class="{ connected: isConnected }" />{{ selectedSession.user }}@{{ selectedSession.host || t('message.unconfiguredHost') }}:{{ selectedSession.port }}<span class="connection-state" :class="{ connected: isConnected }">{{ t(isConnected ? 'state.connected' : 'state.disconnected') }}</span></p></div>
-          <div class="header-actions"><span class="button-wrap" :title="connectHint"><button class="success-button" type="button" :disabled="sessionBusy !== null || isConnected" @click="connect">{{ sessionBusy === 'connect' ? t('common.inProgress', { action: t('action.connectAndStart') }) : t('action.connectAndStart') }}</button></span><span class="button-wrap" :title="disconnectHint"><button class="danger-button" type="button" :disabled="sessionBusy !== null || !isConnected" @click="disconnect">{{ sessionBusy === 'disconnect' ? t('common.inProgress', { action: t('action.disconnect') }) : t('action.disconnect') }}</button></span><span class="button-wrap" :title="reconnectHint"><button class="secondary-button" type="button" :disabled="sessionBusy !== null" @click="reconnect">{{ sessionBusy === 'reconnect' ? t('common.inProgress', { action: t('action.reconnectTunnels') }) : t('action.reconnectTunnels') }}</button></span><button class="danger-button" type="button" @click="requestRemoveSession">{{ t('action.deleteSession') }}</button></div>
+          <div class="header-actions"><span class="button-wrap" :title="connectHint || undefined"><button class="success-button" type="button" :aria-description="connectHint || undefined" :disabled="sessionBusy !== null || isConnected" @click="connect">{{ sessionBusy === 'connect' ? t('common.inProgress', { action: t('action.connectAndStart') }) : t('action.connectAndStart') }}</button></span><span class="button-wrap" :title="disconnectHint || undefined"><button class="danger-button" type="button" :aria-description="disconnectHint || undefined" :disabled="sessionBusy !== null || !isConnected" @click="disconnect">{{ sessionBusy === 'disconnect' ? t('common.inProgress', { action: t('action.disconnect') }) : t('action.disconnect') }}</button></span><span class="button-wrap" :title="reconnectHint || undefined"><button class="secondary-button" type="button" :aria-description="reconnectHint || undefined" :disabled="sessionBusy !== null" @click="reconnect">{{ sessionBusy === 'reconnect' ? t('common.inProgress', { action: t('action.reconnectTunnels') }) : t('action.reconnectTunnels') }}</button></span><button class="danger-button" type="button" @click="requestRemoveSession">{{ t('action.deleteSession') }}</button></div>
         </header>
         <TunnelGrid :rules="currentRules" :bulk-busy="bulkOperationsBusy" :session-connected="isConnected" @add="addRule" @update="updateRule" @toggle="toggleRule" @remove="requestRemoveRule" @clone="cloneRule" @start-all="startAll" @stop-all="stopAll" />
         <section class="session-editor">

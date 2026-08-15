@@ -41,4 +41,22 @@ describe('TunnelGrid', () => {
 
     expect(wrapper.emitted('remove')).toEqual([['rule-0']])
   })
+
+  it('disables start-all when disconnected and both bulk buttons while busy', () => {
+    const disconnected = mount(TunnelGrid, {
+      ...withChineseI18n(),
+      props: { rules: [rules[0]], sessionConnected: false },
+    })
+    const toolbarButtons = disconnected.findAll('.toolbar-actions button')
+    expect(toolbarButtons[1].attributes('disabled')).toBeDefined()
+    expect(toolbarButtons[2].attributes('disabled')).toBeUndefined()
+
+    const busy = mount(TunnelGrid, {
+      ...withChineseI18n(),
+      props: { rules: [rules[0]], sessionConnected: true, bulkBusy: true },
+    })
+    const busyButtons = busy.findAll('.toolbar-actions button')
+    expect(busyButtons[1].attributes('disabled')).toBeDefined()
+    expect(busyButtons[2].attributes('disabled')).toBeDefined()
+  })
 })

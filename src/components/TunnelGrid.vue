@@ -4,7 +4,14 @@ import { computed, ref, watch } from 'vue'
 import { injectI18n } from '../i18n'
 import type { LocalForwardRule, TunnelState } from '../types/via'
 
-const props = defineProps<{ rules: LocalForwardRule[] }>()
+const props = withDefaults(defineProps<{
+  rules: LocalForwardRule[]
+  bulkBusy?: boolean
+  sessionConnected?: boolean
+}>(), {
+  bulkBusy: false,
+  sessionConnected: true,
+})
 const emit = defineEmits<{
   add: []
   update: [rule: LocalForwardRule]
@@ -42,8 +49,8 @@ const onScroll = (event: Event) => { scrollTop.value = (event.target as HTMLElem
     <div class="toolbar">
       <div class="toolbar-actions">
         <button class="primary-button" type="button" @click="emit('add')">{{ t('action.addRule') }}</button>
-        <button class="success-button" type="button" @click="emit('startAll')">{{ t('action.startAll') }}</button>
-        <button class="secondary-button" type="button" @click="emit('stopAll')">{{ t('action.stopAll') }}</button>
+        <button class="success-button" type="button" :disabled="bulkBusy || !sessionConnected" @click="emit('startAll')">{{ t('action.startAll') }}</button>
+        <button class="secondary-button" type="button" :disabled="bulkBusy" @click="emit('stopAll')">{{ t('action.stopAll') }}</button>
       </div>
       <label class="search"><span aria-hidden="true">⌕</span><input v-model="query" :placeholder="t('placeholder.searchRules')" /></label>
     </div>

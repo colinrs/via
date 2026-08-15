@@ -207,18 +207,18 @@ async fn snapshot_serializes_connected_session_ids_as_camel_case() {
 #[tokio::test]
 async fn snapshot_orders_connected_session_ids() {
     let manager = TunnelManager::new();
-    let greater = uuid::Uuid::from_u128(2);
-    let lesser = uuid::Uuid::from_u128(1);
+    let third = uuid::Uuid::from_u128(3);
+    let first = uuid::Uuid::from_u128(1);
+    let second = uuid::Uuid::from_u128(2);
+    manager.register_session(third, Arc::new(EchoSession)).await;
+    manager.register_session(first, Arc::new(EchoSession)).await;
     manager
-        .register_session(greater, Arc::new(EchoSession))
-        .await;
-    manager
-        .register_session(lesser, Arc::new(EchoSession))
+        .register_session(second, Arc::new(EchoSession))
         .await;
 
     let snapshot = manager.snapshot().await;
 
-    assert_eq!(snapshot.connected_session_ids, vec![lesser, greater]);
+    assert_eq!(snapshot.connected_session_ids, vec![first, second, third]);
 }
 
 fn rule(session_id: uuid::Uuid, port: u16) -> LocalForwardRule {

@@ -200,7 +200,7 @@ describe('App', () => {
     await flushPromises()
 
     expect(document.documentElement.dataset.fontSize).toBe('medium')
-    expect(wrapper.get('.statusbar').text()).toContain('Could not load settings')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('Could not load settings')
     expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
     wrapper.unmount()
   })
@@ -337,29 +337,6 @@ describe('App', () => {
     expect(wrapper.text()).not.toContain('No SSH sessions yet')
   })
 
-  it('retranslates an existing status error when the app locale changes', async () => {
-    const i18n = createI18n('en')
-    invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
-      if (command === 'secret_store_status') return { configured: true }
-      if (command === 'load_preferences') return englishPreferences
-      if (command === 'export_config') throw new Error('export unavailable')
-      return undefined
-    })
-    listen.mockResolvedValue(() => undefined)
-
-    const wrapper = mount(App, { props: { i18n } })
-    await flushPromises()
-    await wrapper.findAll('.title-actions button')[1].trigger('click')
-    await flushPromises()
-    expect(wrapper.get('.statusbar').text()).toContain('Could not read configuration.')
-
-    i18n.setLanguage('zh-CN')
-    await wrapper.vm.$nextTick()
-    expect(wrapper.get('.statusbar').text()).toContain('无法读取配置。')
-    expect(wrapper.get('.statusbar').text()).not.toContain('Could not read configuration.')
-  })
-
   it('renders the tunnel management workspace after startup confirms a configured vault', async () => {
     const wrapper = await mountAppWithSecretStatus({ configured: true })
 
@@ -439,8 +416,8 @@ describe('App', () => {
     pendingInitialize.reject(new Error('backend failure includes never expose this password'))
     await flushPromises()
     expect(wrapper.get('[aria-label="初始化本地凭据"]')).toBeTruthy()
-    expect(wrapper.get('.statusbar').text()).toContain('初始化本地凭据失败，请重试。')
-    expect(wrapper.get('.statusbar').text()).not.toContain('never expose this password')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('初始化本地凭据失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).not.toContain('never expose this password')
   })
 
   it('shows legacy migration recovery codes after unlock and gates workspace until acknowledgement', async () => {
@@ -517,7 +494,7 @@ describe('App', () => {
     expect(wrapper.get('[aria-label="初始化本地凭据"]')).toBeTruthy()
     expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
-    expect(wrapper.get('.statusbar').text()).toContain('初始化本地凭据失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('初始化本地凭据失败，请重试。')
   })
 
   it('keeps unlock open when legacy unlock returns malformed recovery codes', async () => {
@@ -532,7 +509,7 @@ describe('App', () => {
 
     expect(wrapper.get('[aria-label="解锁本地凭据"]')).toBeTruthy()
     expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
-    expect(wrapper.get('.statusbar').text()).toContain('主密码不正确，无法解锁本地凭据。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('主密码不正确，无法解锁本地凭据。')
   })
 
   it('ignores generic close and out-of-context secret events while recovery codes are pending', async () => {
@@ -742,9 +719,9 @@ describe('App', () => {
     expect(wrapper.get('[aria-label="恢复本地凭据"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="recover-secrets-action"]')).toBeTruthy()
     expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
-    expect(wrapper.get('.statusbar').text()).toContain('恢复本地凭据失败，请检查恢复码后重试。')
-    expect(wrapper.get('.statusbar').text()).not.toContain('SECRET-INPUT')
-    expect(wrapper.get('.statusbar').text()).not.toContain('NEW-MASTER-PASSWORD')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('恢复本地凭据失败，请检查恢复码后重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).not.toContain('SECRET-INPUT')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).not.toContain('NEW-MASTER-PASSWORD')
   })
 
   it('creates a session in the group selected in the dialog', async () => {
@@ -1023,7 +1000,7 @@ describe('App', () => {
 
     expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/old/key')
     expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(savesBeforePick)
-    expect(wrapper.get('.statusbar').text()).toContain('选择私钥文件失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('选择私钥文件失败，请重试。')
   })
 
   it('restores the previous private-key path when picker persistence fails', async () => {
@@ -1038,7 +1015,7 @@ describe('App', () => {
     await flushPromises()
 
     expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/old/key')
-    expect(wrapper.get('.statusbar').text()).toContain('保存失败，请检查会话和规则填写是否完整。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('保存失败，请检查会话和规则填写是否完整。')
   })
 
   it('persists a selected private-key path before submitting its passphrase', async () => {
@@ -1131,7 +1108,7 @@ describe('App', () => {
     await flushPromises()
 
     expect((wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value).toBe('retry config')
-    expect(wrapper.get('.statusbar').text()).toContain('保存认证配置失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('保存认证配置失败，请重试。')
     expect(invoke.mock.calls.filter(([command]) => command === 'save_session_secret')).toHaveLength(secretCallsBeforeSave)
   })
 
@@ -1147,7 +1124,7 @@ describe('App', () => {
     await flushPromises()
 
     expect((wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value).toBe('retry me')
-    expect(wrapper.get('.statusbar').text()).toContain('保存认证凭据失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('保存认证凭据失败，请重试。')
   })
 
   it('submits the captured secret to its originating session when selection changes during config saving', async () => {
@@ -1366,7 +1343,7 @@ describe('App', () => {
 
     expect(wrapper.find('[title="删除规则"]').exists()).toBe(true)
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除转发规则')
-    expect(wrapper.get('.statusbar').text()).toContain('删除规则失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除规则失败，请重试。')
   })
 
   it('reloads backend configuration when a missing rule rejects deletion', async () => {
@@ -1391,7 +1368,7 @@ describe('App', () => {
 
     expect(loadCount).toBe(2)
     expect(wrapper.find('[title="删除规则"]').exists()).toBe(false)
-    expect(wrapper.get('.statusbar').text()).toContain('删除规则失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除规则失败，请重试。')
   })
 
   it('continues deleting a running rule when its best-effort stop fails', async () => {
@@ -1432,7 +1409,7 @@ describe('App', () => {
     await flushPromises()
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除转发规则')
     expect(wrapper.get('[title="删除规则"]')).toBeTruthy()
-    expect(wrapper.get('.statusbar').text()).toContain('删除规则失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除规则失败，请重试。')
   })
 
   it('confirms a group cascade with exact session and rule counts before deleting', async () => {
@@ -1493,7 +1470,7 @@ describe('App', () => {
     expect(wrapper.text()).toContain('会话 session-a')
     expect(wrapper.get('.session-header h1').text()).toBe('会话 session-a')
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除分组')
-    expect(wrapper.get('.statusbar').text()).toContain('删除分组失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除分组失败，请重试。')
   })
 
   it('reloads backend configuration when a missing group rejects deletion', async () => {
@@ -1523,7 +1500,7 @@ describe('App', () => {
     expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="group-toggle-group-b"]')).toBeTruthy()
     expect(wrapper.get('.session-header h1').text()).toBe('会话 session-b')
-    expect(wrapper.get('.statusbar').text()).toContain('删除分组失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除分组失败，请重试。')
   })
 
   it('continues deleting a group when best-effort session disconnects fail', async () => {
@@ -1565,7 +1542,7 @@ describe('App', () => {
     await flushPromises()
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除分组')
     expect(wrapper.get('[data-testid="group-toggle-group-a"]')).toBeTruthy()
-    expect(wrapper.get('.statusbar').text()).toContain('删除分组失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除分组失败，请重试。')
   })
 
   it('rejects a stale dialog confirmation after the refreshed group scope is armed', async () => {
@@ -1748,7 +1725,7 @@ describe('App', () => {
     await wrapper.findAll('button').find((button) => button.text() === '断开连接')!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('.statusbar').text()).toContain('断开连接失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('断开连接失败，请重试。')
   })
 
   it('rebuilds the connection when reconnect tunnels is pressed', async () => {

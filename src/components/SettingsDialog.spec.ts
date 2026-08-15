@@ -45,12 +45,10 @@ describe('SettingsDialog', () => {
   it('emits a complete canonical preference after each select changes', async () => {
     const wrapper = mountDialog()
 
-    await wrapper.get('[aria-label="Theme"]').setValue('dark')
     await wrapper.get('[aria-label="Font size"]').setValue('large')
     await wrapper.get('[aria-label="Language"]').setValue('zh-CN')
 
     expect(wrapper.emitted('updatePreferences')).toEqual([
-      [{ language: 'system', fontSize: 'medium', theme: 'dark' }],
       [{ language: 'system', fontSize: 'large', theme: 'system' }],
       [{ language: 'zh-CN', fontSize: 'medium', theme: 'system' }],
     ])

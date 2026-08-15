@@ -93,18 +93,6 @@ watch(() => props.masterPasswordChangedToken, clearPasswords)
             <option value="large">{{ t('settings.fontSize.large') }}</option>
           </select>
         </label>
-        <label>
-          {{ t('settings.theme') }}
-          <select
-            :value="preferences.theme"
-            :aria-label="t('settings.theme')"
-            @change="updatePreference('theme', ($event.target as HTMLSelectElement).value as AppPreferences['theme'])"
-          >
-            <option value="system">{{ t('settings.theme.system') }}</option>
-            <option value="light">{{ t('settings.theme.light') }}</option>
-            <option value="dark">{{ t('settings.theme.dark') }}</option>
-          </select>
-        </label>
         <p v-if="preferencesError" class="error" role="alert">{{ preferencesError }}</p>
       </fieldset>
 

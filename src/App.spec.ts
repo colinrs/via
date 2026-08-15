@@ -1784,4 +1784,79 @@ describe('App', () => {
     pendingConnect.resolve()
     await flushPromises()
   })
+
+  it('shows a not-connected hint on the disabled disconnect button', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    })
+    const disconnect = wrapper.findAll('button').find((button) => button.text() === '断开连接')!
+    expect(disconnect.element.parentElement?.getAttribute('title')).toBe('会话未连接')
+  })
+
+  it('shows a connected hint on the disabled connect button', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    })
+    const runtimeListener = listen.mock.calls.at(-1)![1]
+    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    await wrapper.vm.$nextTick()
+
+    const connect = wrapper.findAll('button').find((button) => button.text() === '连接并启动')!
+    expect(connect.element.parentElement?.getAttribute('title')).toBe('会话已连接')
+  })
+
+  it('shows an in-progress hint on the disabled reconnect button', async () => {
+    const pendingConnect = deferred()
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    }, [], { connect_session: () => pendingConnect.promise })
+    await wrapper.findAll('button').find((button) => button.text() === '连接并启动')!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const reconnect = wrapper.findAll('button').find((button) => button.text().includes('重连隧道'))!
+    expect(reconnect.element.parentElement?.getAttribute('title')).toBe('操作进行中，请稍候')
+    pendingConnect.resolve()
+    await flushPromises()
+  })
+
+  it('disables bulk actions while start-all is in flight', async () => {
+    const pendingStart = deferred()
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    }, [], { start_enabled_rules: () => pendingStart.promise })
+    const runtimeListener = listen.mock.calls.at(-1)![1]
+    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    await wrapper.vm.$nextTick()
+
+    await wrapper.findAll('button').find((button) => button.text().includes('启动所有'))!.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('button').find((button) => button.text().includes('启动所有'))!.attributes('disabled')).toBeDefined()
+
+    pendingStart.resolve()
+    await flushPromises()
+  })
+
+  it('shows an in-progress label on reconnect while pending', async () => {
+    const pendingDisconnect = deferred()
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    }, [], { disconnect_session: () => pendingDisconnect.promise })
+
+    await wrapper.findAll('button').find((button) => button.text().includes('重连隧道'))!.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('button').some((button) => button.text().includes('重连隧道中'))).toBe(true)
+
+    pendingDisconnect.resolve()
+    await flushPromises()
+  })
 })

@@ -163,7 +163,7 @@ describe('App', () => {
     expect(document.documentElement.lang).toBe('en')
     expect(document.documentElement.dataset.fontSize).toBe('large')
     expect(document.documentElement.style.zoom).toBe('1.125')
-    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(document.documentElement.dataset.theme).toBe('mac')
     expect(wrapper.get('[data-testid="config-button"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
     wrapper.unmount()
@@ -224,14 +224,14 @@ describe('App', () => {
 
     await openConfigMenu(wrapper)
     await wrapper.get('[data-testid="config-settings"]').trigger('click')
-    await wrapper.get('select[aria-label="Theme"]').setValue('dark')
-    expect(document.documentElement.dataset.theme).toBe('dark')
+    await wrapper.get('select[aria-label="Font size"]').setValue('large')
+    expect(document.documentElement.dataset.fontSize).toBe('large')
 
     preferenceSave.reject(new Error('backend failure with sensitive details'))
     await flushPromises()
 
-    expect(document.documentElement.dataset.theme).toBe('light')
-    expect(wrapper.get('select[aria-label="Theme"]').element).toHaveProperty('value', 'light')
+    expect(document.documentElement.dataset.fontSize).toBe('medium')
+    expect(wrapper.get('select[aria-label="Font size"]').element).toHaveProperty('value', 'medium')
     expect(wrapper.get('[role="dialog"]').text()).toContain('Could not save settings. Please try again.')
     expect(wrapper.get('[role="dialog"]').text()).not.toContain('sensitive details')
     wrapper.unmount()
@@ -269,7 +269,7 @@ describe('App', () => {
     expect(invoke.mock.calls.filter(([command]) => command === 'save_preferences')).toHaveLength(savesBeforeUpdates + 2)
     expect(dialog.props('preferences')).toEqual({ language: 'en', fontSize: 'large', theme: 'dark' })
     expect(document.documentElement.dataset.fontSize).toBe('large')
-    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(document.documentElement.dataset.theme).toBe('mac')
 
     secondSave.resolve(null)
     await flushPromises()

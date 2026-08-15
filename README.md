@@ -60,6 +60,12 @@ V1 不提供 Remote Forwarding、Dynamic/SOCKS5、终端、SFTP、云端同步�
 
 V1 does not provide remote forwarding, dynamic/SOCKS5, a terminal, SFTP, cloud sync, or cross-platform support.
 
+## 发布产物 · Release artifacts
+
+CI 会构建三种安装包：macOS（Apple Silicon 与 Intel）、Windows x64、Linux x64。当前仅 macOS 得到官方支持与测试；Windows x64 与 Linux x64 构建产物会随附发布，但未经过测试。
+
+CI builds three installers: macOS (Apple Silicon and Intel), Windows x64, and Linux x64. Only macOS is officially supported and tested; the Windows x64 and Linux x64 artifacts are shipped but untested.
+
 ## 技术栈 · Tech Stack
 
 | 层 Layer | 技术 Technology |

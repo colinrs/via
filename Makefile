@@ -8,7 +8,7 @@ APP_BUNDLE := $(TAURI_DIR)/target/release/bundle/macos/Via.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build format test check package clean clean-all
+.PHONY: help install dev build format test lint check package clean clean-all
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -32,11 +32,17 @@ test: ## Run all frontend and Rust tests.
 	$(NPM) run typecheck
 	$(CARGO) fmt --manifest-path $(TAURI_DIR)/Cargo.toml --check
 	$(CARGO) clippy --manifest-path $(TAURI_DIR)/Cargo.toml --all-targets -- -D warnings
-	$(CARGO) test --manifest-path $(TAURI_DIR)/Cargo.toml
+	$(CARGO) test --manifest-path $(TAURI_DIR)/Cargo.toml -- --test-threads=1
 
 check: ## Run the same quality checks as CI without producing a frontend bundle.
 	$(NPM) run typecheck
 	$(CARGO) check --manifest-path $(TAURI_DIR)/Cargo.toml
+	$(CARGO) clippy --manifest-path $(TAURI_DIR)/Cargo.toml --all-targets -- -D warnings
+
+lint: ## Static-check TypeScript (prettier/typecheck) and Rust (fmt/clippy) without tests.
+	$(NPM) run format:check
+	$(NPM) run typecheck
+	$(CARGO) fmt --manifest-path $(TAURI_DIR)/Cargo.toml --check
 	$(CARGO) clippy --manifest-path $(TAURI_DIR)/Cargo.toml --all-targets -- -D warnings
 
 package: ## Create and locally ad-hoc-sign a macOS .app bundle.

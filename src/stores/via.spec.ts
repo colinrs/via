@@ -572,41 +572,39 @@ describe('ViaStore', () => {
           rules: Array<{ ruleId: string; state: 'reconnecting'; message: null }>
         }) => void)
       | undefined
-    const invoke = vi
-      .fn()
-      .mockImplementation((command: string) =>
-        command === 'load_config'
-          ? Promise.resolve({
-              schemaVersion: 1,
-              groups: [],
-              sessions: [
-                {
-                  id: 's',
-                  groupId: 'g',
-                  name: 'n',
-                  host: 'h',
-                  port: 22,
-                  user: 'u',
-                  auth: { kind: 'password', secretId: null },
-                },
-              ],
-              rules: [
-                {
-                  id: 'r',
-                  sessionId: 's',
-                  enabled: true,
-                  localPort: 1,
-                  targetHost: 'h',
-                  targetPort: 1,
-                  note: '',
-                  runtimeState: 'stopped',
-                },
-              ],
-            })
-          : command === 'secret_store_status'
-            ? Promise.resolve({ configured: true })
-            : Promise.resolve()
-      )
+    const invoke = vi.fn().mockImplementation((command: string) =>
+      command === 'load_config'
+        ? Promise.resolve({
+            schemaVersion: 1,
+            groups: [],
+            sessions: [
+              {
+                id: 's',
+                groupId: 'g',
+                name: 'n',
+                host: 'h',
+                port: 22,
+                user: 'u',
+                auth: { kind: 'password', secretId: null },
+              },
+            ],
+            rules: [
+              {
+                id: 'r',
+                sessionId: 's',
+                enabled: true,
+                localPort: 1,
+                targetHost: 'h',
+                targetPort: 1,
+                note: '',
+                runtimeState: 'stopped',
+              },
+            ],
+          })
+        : command === 'secret_store_status'
+          ? Promise.resolve({ configured: true })
+          : Promise.resolve()
+    )
     const store = createViaStore({
       invoke,
       listen: vi.fn().mockImplementation((_event, handler) => {

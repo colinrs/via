@@ -43,9 +43,10 @@ describe('TunnelGrid', () => {
   })
 
   it('disables start-all when disconnected and both bulk buttons while busy', () => {
+    const activeRules = [{ ...rules[0], runtimeState: 'active' as const }]
     const disconnected = mount(TunnelGrid, {
       ...withChineseI18n(),
-      props: { rules: [rules[0]], sessionConnected: false },
+      props: { rules: activeRules, sessionConnected: false },
     })
     const toolbarButtons = disconnected.findAll('.toolbar-actions button')
     expect(toolbarButtons[1].attributes('disabled')).toBeDefined()
@@ -53,10 +54,27 @@ describe('TunnelGrid', () => {
 
     const busy = mount(TunnelGrid, {
       ...withChineseI18n(),
-      props: { rules: [rules[0]], sessionConnected: true, bulkBusy: true },
+      props: { rules: activeRules, sessionConnected: true, bulkBusy: true },
     })
     const busyButtons = busy.findAll('.toolbar-actions button')
     expect(busyButtons[1].attributes('disabled')).toBeDefined()
     expect(busyButtons[2].attributes('disabled')).toBeDefined()
+  })
+
+  it('hides stop-all when every rule is stopped', () => {
+    const wrapper = mount(TunnelGrid, { ...withChineseI18n(), props: { rules: [rules[0]] } })
+    expect(wrapper.findAll('button').some((button) => button.text().includes('全部关闭'))).toBe(false)
+  })
+
+  it('shows stop-all when any rule is not stopped', () => {
+    const activeRules = [{ ...rules[0], runtimeState: 'active' as const }]
+    const wrapper = mount(TunnelGrid, { ...withChineseI18n(), props: { rules: activeRules } })
+    expect(wrapper.findAll('button').some((button) => button.text().includes('全部关闭'))).toBe(true)
+  })
+
+  it('shows a connect-first hint on start-all when disconnected', () => {
+    const wrapper = mount(TunnelGrid, { ...withChineseI18n(), props: { rules: [rules[0]], sessionConnected: false } })
+    const startAll = wrapper.findAll('button').find((button) => button.text().includes('启动所有'))!
+    expect(startAll.element.parentElement?.getAttribute('title')).toBe('先连接 SSH 会话')
   })
 })

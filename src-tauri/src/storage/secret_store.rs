@@ -28,6 +28,16 @@ const VERIFIER: &[u8] = b"via-secret-store-v2";
 const CURRENT_VERSION: i64 = 2;
 const RECOVERY_CODE_COUNT: usize = 10;
 
+// These `#[cfg(test)]` globals are coordination hooks for the two concurrency
+// tests in this module (`poisoned_state_before_commit_leaves_...` and
+// `password_change_waiting_for_sqlite_does_not_block_secret_reads`). They are
+// process-wide, so under `cargo test`'s default parallel execution one test's
+// hook is visible to a concurrently running test's `change_master_password` /
+// `connection` call, which can deadlock on the other test's `Barrier`. The
+// tests pass when run serially:
+//   cargo test --lib storage::secret_store -- --test-threads=1
+// Left as-is intentionally; serialize these tests (e.g. via `serial_test`) if
+// parallel runs start hanging.
 #[cfg(test)]
 static CHANGE_MASTER_PASSWORD_CHECKPOINT: Mutex<Option<Arc<(Barrier, Barrier)>>> = Mutex::new(None);
 

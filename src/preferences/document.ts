@@ -19,11 +19,16 @@ const palette: Record<string, string> = {
   '--yellow': '#996600',
 }
 
-const fontScales: Record<AppPreferences['fontSize'], string> = { small: '.875', medium: '1', large: '1.125' }
+const fontScales: Record<AppPreferences['fontSize'], string> = {
+  small: '.875',
+  medium: '1',
+  large: '1.125',
+}
 
 function applyTheme(root: HTMLElement) {
   root.dataset.theme = 'mac'
-  for (const [name, value] of Object.entries(palette)) root.style.setProperty(name, value)
+  for (const [name, value] of Object.entries(palette))
+    root.style.setProperty(name, value)
   root.style.color = 'var(--text)'
   root.style.backgroundColor = 'var(--canvas)'
 }
@@ -31,10 +36,13 @@ function applyTheme(root: HTMLElement) {
 export function applyDocumentPreferences(
   preferences: AppPreferences,
   window: PreferenceWindow,
-  document: Pick<Document, 'documentElement'>,
+  document: Pick<Document, 'documentElement'>
 ): () => void {
   const root = document.documentElement
-  root.lang = resolveSystemLanguage(preferences.language, window.navigator?.language)
+  root.lang = resolveSystemLanguage(
+    preferences.language,
+    window.navigator?.language
+  )
   root.dataset.fontSize = preferences.fontSize
   root.style.setProperty('--app-font-scale', fontScales[preferences.fontSize])
   root.style.removeProperty('font-size')

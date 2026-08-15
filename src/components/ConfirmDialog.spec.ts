@@ -6,7 +6,16 @@ import { withChineseI18n } from '../test/i18n'
 
 describe('ConfirmDialog', () => {
   it('emits confirm from the explicit destructive action', async () => {
-    const wrapper = mount(ConfirmDialog, { ...withChineseI18n(), props: { open: true, title: '删除会话', message: '会删除规则', confirmText: '删除', generation: 42 } })
+    const wrapper = mount(ConfirmDialog, {
+      ...withChineseI18n(),
+      props: {
+        open: true,
+        title: '删除会话',
+        message: '会删除规则',
+        confirmText: '删除',
+        generation: 42,
+      },
+    })
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
     expect(wrapper.emitted('confirm')).toEqual([[42]])
   })
@@ -14,7 +23,13 @@ describe('ConfirmDialog', () => {
   it('disables cancellation and repeated confirmation while busy', async () => {
     const wrapper = mount(ConfirmDialog, {
       ...withChineseI18n(),
-      props: { open: true, title: '删除会话', message: '会删除规则', confirmText: '删除', busy: true },
+      props: {
+        open: true,
+        title: '删除会话',
+        message: '会删除规则',
+        confirmText: '删除',
+        busy: true,
+      },
     })
 
     const buttons = wrapper.findAll('button')

@@ -3,14 +3,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createToastController } from './toast'
 
 describe('toast controller', () => {
-  afterEach(() => { vi.useRealTimers() })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
 
   it('appends toasts and dismisses a single toast by id', () => {
     vi.useFakeTimers()
     const controller = createToastController()
     controller.push('first', 'error')
     controller.push('second', 'success')
-    expect(controller.toasts.map((toast) => toast.message)).toEqual(['first', 'second'])
+    expect(controller.toasts.map((toast) => toast.message)).toEqual([
+      'first',
+      'second',
+    ])
     controller.dismiss(controller.toasts[0].id)
     expect(controller.toasts.map((toast) => toast.message)).toEqual(['second'])
   })

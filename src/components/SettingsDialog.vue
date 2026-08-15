@@ -4,24 +4,27 @@ import { computed, ref, watch } from 'vue'
 import { injectI18n, type Translate } from '../i18n'
 import type { AppPreferences } from '../stores/via'
 
-const props = withDefaults(defineProps<{
-  open: boolean
-  preferences: AppPreferences
-  t?: Translate
-  saving?: boolean
-  masterPasswordChanging?: boolean
-  masterPasswordConfigured?: boolean
-  preferencesError?: string
-  masterPasswordError?: string
-  masterPasswordChangedToken?: number
-}>(), {
-  saving: false,
-  masterPasswordChanging: false,
-  masterPasswordConfigured: false,
-  preferencesError: '',
-  masterPasswordError: '',
-  masterPasswordChangedToken: 0,
-})
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    preferences: AppPreferences
+    t?: Translate
+    saving?: boolean
+    masterPasswordChanging?: boolean
+    masterPasswordConfigured?: boolean
+    preferencesError?: string
+    masterPasswordError?: string
+    masterPasswordChangedToken?: number
+  }>(),
+  {
+    saving: false,
+    masterPasswordChanging: false,
+    masterPasswordConfigured: false,
+    preferencesError: '',
+    masterPasswordError: '',
+    masterPasswordChangedToken: 0,
+  }
+)
 
 const emit = defineEmits<{
   updatePreferences: [preferences: AppPreferences]
@@ -33,12 +36,18 @@ const t = props.t ?? injectI18n().t
 const currentPassword = ref('')
 const newPassword = ref('')
 const confirmation = ref('')
-const canChangePassword = computed(() => !props.masterPasswordChanging
-  && currentPassword.value.trim().length > 0
-  && newPassword.value.trim().length > 0
-  && newPassword.value === confirmation.value)
+const canChangePassword = computed(
+  () =>
+    !props.masterPasswordChanging &&
+    currentPassword.value.trim().length > 0 &&
+    newPassword.value.trim().length > 0 &&
+    newPassword.value === confirmation.value
+)
 
-function updatePreference<Key extends keyof AppPreferences>(key: Key, value: AppPreferences[Key]) {
+function updatePreference<Key extends keyof AppPreferences>(
+  key: Key,
+  value: AppPreferences[Key]
+) {
   emit('updatePreferences', { ...props.preferences, [key]: value })
 }
 
@@ -63,7 +72,13 @@ watch(() => props.masterPasswordChangedToken, clearPasswords)
 </script>
 
 <template>
-  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" :aria-label="t('settings.title')">
+  <div
+    v-if="open"
+    class="backdrop"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="t('settings.title')"
+  >
     <section class="dialog">
       <h2>{{ t('settings.title') }}</h2>
 
@@ -74,7 +89,13 @@ watch(() => props.masterPasswordChangedToken, clearPasswords)
           <select
             :value="preferences.language"
             :aria-label="t('settings.language')"
-            @change="updatePreference('language', ($event.target as HTMLSelectElement).value as AppPreferences['language'])"
+            @change="
+              updatePreference(
+                'language',
+                ($event.target as HTMLSelectElement)
+                  .value as AppPreferences['language']
+              )
+            "
           >
             <option value="system">{{ t('settings.language.system') }}</option>
             <option value="zh-CN">{{ t('settings.language.zh-CN') }}</option>
@@ -86,38 +107,70 @@ watch(() => props.masterPasswordChangedToken, clearPasswords)
           <select
             :value="preferences.fontSize"
             :aria-label="t('settings.fontSize')"
-            @change="updatePreference('fontSize', ($event.target as HTMLSelectElement).value as AppPreferences['fontSize'])"
+            @change="
+              updatePreference(
+                'fontSize',
+                ($event.target as HTMLSelectElement)
+                  .value as AppPreferences['fontSize']
+              )
+            "
           >
             <option value="small">{{ t('settings.fontSize.small') }}</option>
             <option value="medium">{{ t('settings.fontSize.medium') }}</option>
             <option value="large">{{ t('settings.fontSize.large') }}</option>
           </select>
         </label>
-        <p v-if="preferencesError" class="error" role="alert">{{ preferencesError }}</p>
+        <p v-if="preferencesError" class="error" role="alert">
+          {{ preferencesError }}
+        </p>
       </fieldset>
 
-      <fieldset v-if="masterPasswordConfigured" :disabled="masterPasswordChanging" :aria-busy="masterPasswordChanging">
+      <fieldset
+        v-if="masterPasswordConfigured"
+        :disabled="masterPasswordChanging"
+        :aria-busy="masterPasswordChanging"
+      >
         <legend>{{ t('settings.localCredentials') }}</legend>
         <label>
           {{ t('settings.currentMasterPassword') }}
-          <input v-model="currentPassword" type="password" autocomplete="current-password" :aria-label="t('settings.currentMasterPassword')">
+          <input
+            v-model="currentPassword"
+            type="password"
+            autocomplete="current-password"
+            :aria-label="t('settings.currentMasterPassword')"
+          />
         </label>
         <label>
           {{ t('settings.newMasterPassword') }}
-          <input v-model="newPassword" type="password" autocomplete="new-password" :aria-label="t('settings.newMasterPassword')">
+          <input
+            v-model="newPassword"
+            type="password"
+            autocomplete="new-password"
+            :aria-label="t('settings.newMasterPassword')"
+          />
         </label>
         <label>
           {{ t('settings.confirmNewMasterPassword') }}
-          <input v-model="confirmation" type="password" autocomplete="new-password" :aria-label="t('settings.confirmNewMasterPassword')" @keyup.enter="changeMasterPassword">
+          <input
+            v-model="confirmation"
+            type="password"
+            autocomplete="new-password"
+            :aria-label="t('settings.confirmNewMasterPassword')"
+            @keyup.enter="changeMasterPassword"
+          />
         </label>
-        <p v-if="masterPasswordError" class="error" role="alert">{{ masterPasswordError }}</p>
+        <p v-if="masterPasswordError" class="error" role="alert">
+          {{ masterPasswordError }}
+        </p>
         <button
           data-testid="change-master-password"
           class="primary"
           type="button"
           :disabled="!canChangePassword"
           @click="changeMasterPassword"
-        >{{ t('settings.changeMasterPassword') }}</button>
+        >
+          {{ t('settings.changeMasterPassword') }}
+        </button>
       </fieldset>
 
       <section class="about">
@@ -127,29 +180,123 @@ watch(() => props.masterPasswordChangedToken, clearPasswords)
       </section>
 
       <footer>
-        <button data-testid="close-settings" type="button" @click="close">{{ t('common.close') }}</button>
+        <button data-testid="close-settings" type="button" @click="close">
+          {{ t('common.close') }}
+        </button>
       </footer>
     </section>
   </div>
 </template>
 
 <style scoped>
-.backdrop { position: fixed; inset: 0; display: grid; place-items: center; background: #0008; z-index: 20; }
-.dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; border: 1px solid var(--line); background: var(--content); padding: 20px; border-radius: var(--radius-lg); box-shadow: var(--shadow-drop); }
-.dialog h2 { margin: 0; font-size: 16px; font-family: var(--font-ui); }
-.dialog p { margin: 12px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
-footer { display: flex; justify-content: flex-end; gap: 8px; }
-button { border: 1px solid var(--line); background: var(--surface-raised); padding: 7px 10px; color: var(--text); cursor: pointer; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised); }
-button:active { box-shadow: var(--shadow-raised-active); }
-button:disabled { cursor: wait; opacity: .6; }
-.danger { border: 2px solid var(--line); }
-fieldset { display: grid; gap: 12px; border: 1px solid var(--line); margin: 0 0 16px; padding: 14px; }
-legend { padding: 0 6px; font-size: 13px; font-weight: 700; font-family: var(--font-ui); }
-label { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr); align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
-input, select { width: 100%; border: 1px solid var(--line); background: var(--content); padding: 8px; color: var(--text); font: inherit; border-radius: var(--radius-sm); box-shadow: var(--shadow-inset); }
-.about h3 { margin: 0; font-size: 13px; font-family: var(--font-ui); }
-.about p { margin: 8px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.error { color: var(--red); font-size: 12px; }
-.primary { justify-self: end; border-width: 2px; font-weight: 700; }
-@media (max-width: 540px) { label { grid-template-columns: 1fr; } }
+.backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #0008;
+  z-index: 20;
+}
+.dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--content);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-drop);
+}
+.dialog h2 {
+  margin: 0;
+  font-size: 16px;
+  font-family: var(--font-ui);
+}
+.dialog p {
+  margin: 12px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+button {
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  padding: 7px 10px;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
+}
+button:active {
+  box-shadow: var(--shadow-raised-active);
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.danger {
+  border: 2px solid var(--line);
+}
+fieldset {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  margin: 0 0 16px;
+  padding: 14px;
+}
+legend {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+}
+label {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr);
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+input,
+select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--content);
+  padding: 8px;
+  color: var(--text);
+  font: inherit;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-inset);
+}
+.about h3 {
+  margin: 0;
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+.about p {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.error {
+  color: var(--red);
+  font-size: 12px;
+}
+.primary {
+  justify-self: end;
+  border-width: 2px;
+  font-weight: 700;
+}
+@media (max-width: 540px) {
+  label {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

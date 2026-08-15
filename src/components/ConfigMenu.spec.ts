@@ -9,7 +9,9 @@ describe('ConfigMenu', () => {
     expect(wrapper.find('[data-testid="config-menu"]').exists()).toBe(false)
 
     await wrapper.get('[data-testid="config-button"]').trigger('click')
-    expect(wrapper.get('[data-testid="config-menu"]').findAll('button')).toHaveLength(4)
+    expect(
+      wrapper.get('[data-testid="config-menu"]').findAll('button')
+    ).toHaveLength(4)
 
     await wrapper.get('[data-testid="config-import"]').trigger('click')
     expect(wrapper.emitted('import')).toHaveLength(1)

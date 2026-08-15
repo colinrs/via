@@ -20,8 +20,16 @@ import SettingsDialog from './components/SettingsDialog.vue'
 import { createI18n } from './i18n'
 import type { AppPreferences } from './stores/via'
 
-const chinesePreferences: AppPreferences = { language: 'zh-CN', fontSize: 'medium', theme: 'system' }
-const englishPreferences: AppPreferences = { language: 'en', fontSize: 'medium', theme: 'system' }
+const chinesePreferences: AppPreferences = {
+  language: 'zh-CN',
+  fontSize: 'medium',
+  theme: 'system',
+}
+const englishPreferences: AppPreferences = {
+  language: 'en',
+  fontSize: 'medium',
+  theme: 'system',
+}
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -38,7 +46,9 @@ function recoveryCodes(prefix: string) {
 }
 
 function openConfirmDialog(wrapper: ReturnType<typeof mount>) {
-  return wrapper.findAllComponents(ConfirmDialog).find((dialog) => dialog.props('open'))!
+  return wrapper
+    .findAllComponents(ConfirmDialog)
+    .find((dialog) => dialog.props('open'))!
 }
 
 async function openConfigMenu(wrapper: ReturnType<typeof mount>) {
@@ -51,7 +61,8 @@ function mountChineseApp() {
 
 function mountAppWithGroups(groups: Array<{ id: string; name: string }>) {
   invoke.mockImplementation(async (command: string) => {
-    if (command === 'load_config') return { schemaVersion: 1, groups, sessions: [], rules: [] }
+    if (command === 'load_config')
+      return { schemaVersion: 1, groups, sessions: [], rules: [] }
     if (command === 'secret_store_status') return { configured: true }
     if (command === 'load_preferences') return chinesePreferences
     return undefined
@@ -65,7 +76,13 @@ function mountAppWithGroups(groups: Array<{ id: string; name: string }>) {
 const session = (
   id: string,
   groupId: string,
-  auth: { kind: 'password'; secretId: string | null } | { kind: 'private_key'; path: string; passphraseSecretId: string | null } = { kind: 'password', secretId: null },
+  auth:
+    | { kind: 'password'; secretId: string | null }
+    | {
+        kind: 'private_key'
+        path: string
+        passphraseSecretId: string | null
+      } = { kind: 'password', secretId: null }
 ) => ({
   id,
   groupId,
@@ -76,7 +93,11 @@ const session = (
   auth,
 })
 
-const rule = (id: string, sessionId: string, runtimeState: 'stopped' | 'active' = 'stopped') => ({
+const rule = (
+  id: string,
+  sessionId: string,
+  runtimeState: 'stopped' | 'active' = 'stopped'
+) => ({
   id,
   sessionId,
   enabled: runtimeState === 'active',
@@ -87,12 +108,18 @@ const rule = (id: string, sessionId: string, runtimeState: 'stopped' | 'active' 
   runtimeState,
 })
 
-function mountAppWithConfig(config: {
-  groups: Array<{ id: string; name: string }>
-  sessions: ReturnType<typeof session>[]
-  rules: ReturnType<typeof rule>[]
-}, commandFailures: string | string[] = [], commandHandlers: Record<string, () => Promise<unknown>> = {}) {
-  const failures = new Set(Array.isArray(commandFailures) ? commandFailures : [commandFailures])
+function mountAppWithConfig(
+  config: {
+    groups: Array<{ id: string; name: string }>
+    sessions: ReturnType<typeof session>[]
+    rules: ReturnType<typeof rule>[]
+  },
+  commandFailures: string | string[] = [],
+  commandHandlers: Record<string, () => Promise<unknown>> = {}
+) {
+  const failures = new Set(
+    Array.isArray(commandFailures) ? commandFailures : [commandFailures]
+  )
   invoke.mockImplementation(async (command: string) => {
     if (commandHandlers[command]) return commandHandlers[command]()
     if (command === 'load_config') return { schemaVersion: 1, ...config }
@@ -118,7 +145,8 @@ function mountAppWithPendingConfig() {
 
 function mountAppWithListenerFailure() {
   invoke.mockImplementation(async (command: string) => {
-    if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+    if (command === 'load_config')
+      return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
     if (command === 'secret_store_status') return { configured: true }
     return undefined
   })
@@ -145,7 +173,8 @@ describe('App', () => {
   it('loads and applies saved preferences before exposing the workspace', async () => {
     const preferenceLoad = deferred<AppPreferences>()
     invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
       if (command === 'load_preferences') return preferenceLoad.promise
       return undefined
@@ -172,7 +201,8 @@ describe('App', () => {
   it('does not apply a late preference load after the app is unmounted', async () => {
     const preferenceLoad = deferred<AppPreferences>()
     invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
       if (command === 'load_preferences') return preferenceLoad.promise
       return undefined
@@ -193,9 +223,11 @@ describe('App', () => {
 
   it('falls back to defaults and reports a translated error when preferences cannot be loaded', async () => {
     invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
-      if (command === 'load_preferences') return { language: 'invalid', fontSize: 'huge', theme: 'unknown' }
+      if (command === 'load_preferences')
+        return { language: 'invalid', fontSize: 'huge', theme: 'unknown' }
       return undefined
     })
     listen.mockResolvedValue(() => undefined)
@@ -204,7 +236,9 @@ describe('App', () => {
     await flushPromises()
 
     expect(document.documentElement.dataset.fontSize).toBe('medium')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('Could not load settings')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      'Could not load settings'
+    )
     expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
     wrapper.unmount()
   })
@@ -212,9 +246,11 @@ describe('App', () => {
   it('optimistically applies a preference and rolls back when its save fails', async () => {
     const preferenceSave = deferred<null>()
     invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
-      if (command === 'load_preferences') return { language: 'en', fontSize: 'medium', theme: 'light' }
+      if (command === 'load_preferences')
+        return { language: 'en', fontSize: 'medium', theme: 'light' }
       if (command === 'save_preferences') return preferenceSave.promise
       return undefined
     })
@@ -231,9 +267,15 @@ describe('App', () => {
     await flushPromises()
 
     expect(document.documentElement.dataset.fontSize).toBe('medium')
-    expect(wrapper.get('select[aria-label="Font size"]').element).toHaveProperty('value', 'medium')
-    expect(wrapper.get('[role="dialog"]').text()).toContain('Could not save settings. Please try again.')
-    expect(wrapper.get('[role="dialog"]').text()).not.toContain('sensitive details')
+    expect(
+      wrapper.get('select[aria-label="Font size"]').element
+    ).toHaveProperty('value', 'medium')
+    expect(wrapper.get('[role="dialog"]').text()).toContain(
+      'Could not save settings. Please try again.'
+    )
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain(
+      'sensitive details'
+    )
     wrapper.unmount()
   })
 
@@ -242,9 +284,11 @@ describe('App', () => {
     const secondSave = deferred<null>()
     let saveCount = 0
     invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
-      if (command === 'load_preferences') return { language: 'en', fontSize: 'medium', theme: 'light' }
+      if (command === 'load_preferences')
+        return { language: 'en', fontSize: 'medium', theme: 'light' }
       if (command === 'save_preferences') {
         saveCount += 1
         return saveCount === 1 ? firstSave.promise : secondSave.promise
@@ -257,23 +301,46 @@ describe('App', () => {
     await openConfigMenu(wrapper)
     await wrapper.get('[data-testid="config-settings"]').trigger('click')
     const dialog = wrapper.getComponent(SettingsDialog)
-    const savesBeforeUpdates = invoke.mock.calls.filter(([command]) => command === 'save_preferences').length
+    const savesBeforeUpdates = invoke.mock.calls.filter(
+      ([command]) => command === 'save_preferences'
+    ).length
 
-    dialog.vm.$emit('updatePreferences', { language: 'en', fontSize: 'medium', theme: 'dark' })
-    dialog.vm.$emit('updatePreferences', { language: 'en', fontSize: 'large', theme: 'dark' })
+    dialog.vm.$emit('updatePreferences', {
+      language: 'en',
+      fontSize: 'medium',
+      theme: 'dark',
+    })
+    dialog.vm.$emit('updatePreferences', {
+      language: 'en',
+      fontSize: 'large',
+      theme: 'dark',
+    })
     await wrapper.vm.$nextTick()
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_preferences')).toHaveLength(savesBeforeUpdates + 1)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_preferences')
+    ).toHaveLength(savesBeforeUpdates + 1)
 
     firstSave.resolve(null)
     await flushPromises()
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_preferences')).toHaveLength(savesBeforeUpdates + 2)
-    expect(dialog.props('preferences')).toEqual({ language: 'en', fontSize: 'large', theme: 'dark' })
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_preferences')
+    ).toHaveLength(savesBeforeUpdates + 2)
+    expect(dialog.props('preferences')).toEqual({
+      language: 'en',
+      fontSize: 'large',
+      theme: 'dark',
+    })
     expect(document.documentElement.dataset.fontSize).toBe('large')
     expect(document.documentElement.dataset.theme).toBe('mac')
 
     secondSave.resolve(null)
     await flushPromises()
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_preferences').slice(savesBeforeUpdates).map(([, args]) => args)).toEqual([
+    expect(
+      invoke.mock.calls
+        .filter(([command]) => command === 'save_preferences')
+        .slice(savesBeforeUpdates)
+        .map(([, args]) => args)
+    ).toEqual([
       { preferences: { language: 'en', fontSize: 'medium', theme: 'dark' } },
       { preferences: { language: 'en', fontSize: 'large', theme: 'dark' } },
     ])
@@ -283,9 +350,11 @@ describe('App', () => {
   it('keeps password drafts after a safe failure and clears them only after a successful change', async () => {
     let changeAttempts = 0
     invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
-      if (command === 'load_preferences') return { language: 'en', fontSize: 'medium', theme: 'light' }
+      if (command === 'load_preferences')
+        return { language: 'en', fontSize: 'medium', theme: 'light' }
       if (command === 'change_master_password') {
         changeAttempts += 1
         if (changeAttempts === 1) throw new Error('backend leaked old master')
@@ -299,31 +368,65 @@ describe('App', () => {
     await openConfigMenu(wrapper)
     await wrapper.get('[data-testid="config-settings"]').trigger('click')
 
-    await wrapper.get('input[aria-label="Current master password"]').setValue('old master')
-    await wrapper.get('input[aria-label="New master password"]').setValue('new master')
-    await wrapper.get('input[aria-label="Confirm new master password"]').setValue('new master')
+    await wrapper
+      .get('input[aria-label="Current master password"]')
+      .setValue('old master')
+    await wrapper
+      .get('input[aria-label="New master password"]')
+      .setValue('new master')
+    await wrapper
+      .get('input[aria-label="Confirm new master password"]')
+      .setValue('new master')
     await wrapper.get('[data-testid="change-master-password"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[role="dialog"]').text()).toContain('Could not change the master password.')
+    expect(wrapper.get('[role="dialog"]').text()).toContain(
+      'Could not change the master password.'
+    )
     expect(wrapper.get('[role="dialog"]').text()).not.toContain('old master')
-    expect((wrapper.get('input[aria-label="Current master password"]').element as HTMLInputElement).value).toBe('old master')
+    expect(
+      (
+        wrapper.get('input[aria-label="Current master password"]')
+          .element as HTMLInputElement
+      ).value
+    ).toBe('old master')
 
     await wrapper.get('[data-testid="change-master-password"]').trigger('click')
     await flushPromises()
 
-    expect(invoke).toHaveBeenLastCalledWith('change_master_password', { currentPassword: 'old master', newPassword: 'new master' })
-    expect((wrapper.get('input[aria-label="Current master password"]').element as HTMLInputElement).value).toBe('')
-    expect((wrapper.get('input[aria-label="New master password"]').element as HTMLInputElement).value).toBe('')
-    expect((wrapper.get('input[aria-label="Confirm new master password"]').element as HTMLInputElement).value).toBe('')
-    expect(wrapper.get('[role="dialog"]').text()).not.toContain('Could not change the master password.')
+    expect(invoke).toHaveBeenLastCalledWith('change_master_password', {
+      currentPassword: 'old master',
+      newPassword: 'new master',
+    })
+    expect(
+      (
+        wrapper.get('input[aria-label="Current master password"]')
+          .element as HTMLInputElement
+      ).value
+    ).toBe('')
+    expect(
+      (
+        wrapper.get('input[aria-label="New master password"]')
+          .element as HTMLInputElement
+      ).value
+    ).toBe('')
+    expect(
+      (
+        wrapper.get('input[aria-label="Confirm new master password"]')
+          .element as HTMLInputElement
+      ).value
+    ).toBe('')
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain(
+      'Could not change the master password.'
+    )
     wrapper.unmount()
   })
 
   it('provides one reactive translation instance to app copy and child components', async () => {
     const i18n = createI18n('en')
     invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
       if (command === 'load_preferences') return englishPreferences
       return undefined
@@ -333,22 +436,33 @@ describe('App', () => {
     const wrapper = mount(App, { props: { i18n } })
     await flushPromises()
     expect(wrapper.get('[data-testid="config-button"]')).toBeTruthy()
-    expect(wrapper.get('[data-testid="empty-workspace"]').text()).toContain('No SSH sessions yet')
-    expect(wrapper.get('.statusbar').text()).toContain('Tunnels: 0 running / 0 issues')
+    expect(wrapper.get('[data-testid="empty-workspace"]').text()).toContain(
+      'No SSH sessions yet'
+    )
+    expect(wrapper.get('.statusbar').text()).toContain(
+      'Tunnels: 0 running / 0 issues'
+    )
 
     i18n.setLanguage('zh-CN')
     await wrapper.vm.$nextTick()
     await openConfigMenu(wrapper)
-    expect(wrapper.get('[data-testid="config-import"]').text()).toContain('导入配置')
-    expect(wrapper.get('[data-testid="empty-workspace"]').text()).toContain('还没有 SSH 会话')
-    expect(wrapper.get('.statusbar').text()).toContain('隧道：0 运行中 / 0 异常')
+    expect(wrapper.get('[data-testid="config-import"]').text()).toContain(
+      '导入配置'
+    )
+    expect(wrapper.get('[data-testid="empty-workspace"]').text()).toContain(
+      '还没有 SSH 会话'
+    )
+    expect(wrapper.get('.statusbar').text()).toContain(
+      '隧道：0 运行中 / 0 异常'
+    )
     expect(wrapper.text()).not.toContain('No SSH sessions yet')
   })
 
   it('translates a newly raised error in the current locale', async () => {
     const i18n = createI18n('en')
     invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return { configured: true }
       if (command === 'load_preferences') return englishPreferences
       if (command === 'export_config') throw new Error('export unavailable')
@@ -361,7 +475,9 @@ describe('App', () => {
     await wrapper.get('[data-testid="config-button"]').trigger('click')
     await wrapper.get('[data-testid="config-export"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('Could not read configuration.')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      'Could not read configuration.'
+    )
   })
 
   it('renders the tunnel management workspace after startup confirms a configured vault', async () => {
@@ -386,7 +502,9 @@ describe('App', () => {
     setup.vm.$emit('setup', 'new master password')
     await flushPromises()
 
-    expect(invoke).toHaveBeenCalledWith('initialize_secrets', { masterPassword: 'new master password' })
+    expect(invoke).toHaveBeenCalledWith('initialize_secrets', {
+      masterPassword: 'new master password',
+    })
     expect(wrapper.find('[aria-label="初始化本地凭据"]').exists()).toBe(false)
     expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('SETUP-1')
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
@@ -401,17 +519,24 @@ describe('App', () => {
   it('keeps startup and backend failure from exposing a workspace that bypasses vault setup', async () => {
     const connecting = mountAppWithPendingConfig()
     await connecting.vm.$nextTick()
-    expect(connecting.find('[data-testid="session-sidebar"]').exists()).toBe(false)
-    expect(connecting.find('[data-testid="config-button"]').exists()).toBe(false)
+    expect(connecting.find('[data-testid="session-sidebar"]').exists()).toBe(
+      false
+    )
+    expect(connecting.find('[data-testid="config-button"]').exists()).toBe(
+      false
+    )
 
     const failed = await mountAppWithListenerFailure()
-    expect(failed.get('[data-testid="backend-dot"]').classes()).toContain('backend-failed')
+    expect(failed.get('[data-testid="backend-dot"]').classes()).toContain(
+      'backend-failed'
+    )
     expect(failed.find('[data-testid="session-sidebar"]').exists()).toBe(false)
   })
 
   it('fails closed when vault status is malformed', async () => {
     invoke.mockImplementation(async (command: string) => {
-      if (command === 'load_config') return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
       if (command === 'secret_store_status') return {}
       return undefined
     })
@@ -419,7 +544,9 @@ describe('App', () => {
     const wrapper = mountChineseApp()
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="backend-dot"]').classes()).toContain('backend-failed')
+    expect(wrapper.get('[data-testid="backend-dot"]').classes()).toContain(
+      'backend-failed'
+    )
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="config-button"]').exists()).toBe(false)
   })
@@ -431,19 +558,29 @@ describe('App', () => {
       commandHandlers: { initialize_secrets: () => pendingInitialize.promise },
     })
     const setup = wrapper.getComponent(SecretSetupDialog)
-    const callsBeforeSetup = invoke.mock.calls.filter(([command]) => command === 'initialize_secrets').length
+    const callsBeforeSetup = invoke.mock.calls.filter(
+      ([command]) => command === 'initialize_secrets'
+    ).length
 
     setup.vm.$emit('setup', 'never expose this password')
     setup.vm.$emit('setup', 'never expose this password')
     await wrapper.vm.$nextTick()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'initialize_secrets')).toHaveLength(callsBeforeSetup + 1)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'initialize_secrets')
+    ).toHaveLength(callsBeforeSetup + 1)
 
-    pendingInitialize.reject(new Error('backend failure includes never expose this password'))
+    pendingInitialize.reject(
+      new Error('backend failure includes never expose this password')
+    )
     await flushPromises()
     expect(wrapper.get('[aria-label="初始化本地凭据"]')).toBeTruthy()
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('初始化本地凭据失败，请重试。')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).not.toContain('never expose this password')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '初始化本地凭据失败，请重试。'
+    )
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).not.toContain(
+      'never expose this password'
+    )
   })
 
   it('shows legacy migration recovery codes after unlock and gates workspace until acknowledgement', async () => {
@@ -455,11 +592,15 @@ describe('App', () => {
     await openConfigMenu(wrapper)
     const unlockButton = wrapper.get('[data-testid="config-unlock"]')
     await unlockButton.trigger('click')
-    wrapper.getComponent(SecretUnlockDialog).vm.$emit('unlock', 'master password')
+    wrapper
+      .getComponent(SecretUnlockDialog)
+      .vm.$emit('unlock', 'master password')
     await flushPromises()
 
     expect(wrapper.find('[aria-label="解锁本地凭据"]').exists()).toBe(false)
-    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('MIGRATION-1')
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain(
+      'MIGRATION-1'
+    )
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
 
     await wrapper.get('[aria-label="我已保存恢复码"]').setValue(true)
@@ -476,12 +617,16 @@ describe('App', () => {
     await openConfigMenu(wrapper)
     await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
-    const callsBeforeUnlock = invoke.mock.calls.filter(([command]) => command === 'unlock_secrets').length
+    const callsBeforeUnlock = invoke.mock.calls.filter(
+      ([command]) => command === 'unlock_secrets'
+    ).length
 
     dialog.vm.$emit('unlock', 'master password')
     dialog.vm.$emit('unlock', 'master password')
     await wrapper.vm.$nextTick()
-    expect(invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')).toHaveLength(callsBeforeUnlock + 1)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')
+    ).toHaveLength(callsBeforeUnlock + 1)
 
     pendingUnlock.resolve(null)
     await flushPromises()
@@ -503,27 +648,37 @@ describe('App', () => {
     dialog.vm.$emit('recover', 'one-time-code', 'new master password')
     await wrapper.vm.$nextTick()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(1)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'recover_secrets')
+    ).toHaveLength(1)
     pendingRecovery.resolve(recoveryCodes('REPLACEMENT'))
     await flushPromises()
 
     expect(wrapper.find('[aria-label="解锁本地凭据"]').exists()).toBe(false)
-    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('REPLACEMENT-1')
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain(
+      'REPLACEMENT-1'
+    )
   })
 
   it('keeps setup active when setup returns the wrong number of recovery codes', async () => {
     const wrapper = await mountAppWithSecretStatus({
       configured: false,
-      commandHandlers: { initialize_secrets: async () => recoveryCodes('SHORT').slice(0, 9) },
+      commandHandlers: {
+        initialize_secrets: async () => recoveryCodes('SHORT').slice(0, 9),
+      },
     })
 
-    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'new master password')
+    wrapper
+      .getComponent(SecretSetupDialog)
+      .vm.$emit('setup', 'new master password')
     await flushPromises()
 
     expect(wrapper.get('[aria-label="初始化本地凭据"]')).toBeTruthy()
     expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('初始化本地凭据失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '初始化本地凭据失败，请重试。'
+    )
   })
 
   it('keeps unlock open when legacy unlock returns malformed recovery codes', async () => {
@@ -534,12 +689,16 @@ describe('App', () => {
     await openConfigMenu(wrapper)
     await wrapper.get('[data-testid="config-unlock"]').trigger('click')
 
-    wrapper.getComponent(SecretUnlockDialog).vm.$emit('unlock', 'master password')
+    wrapper
+      .getComponent(SecretUnlockDialog)
+      .vm.$emit('unlock', 'master password')
     await flushPromises()
 
     expect(wrapper.get('[aria-label="解锁本地凭据"]')).toBeTruthy()
     expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('主密码不正确，无法解锁本地凭据。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '主密码不正确，无法解锁本地凭据。'
+    )
   })
 
   it('ignores generic close and out-of-context secret events while recovery codes are pending', async () => {
@@ -553,20 +712,36 @@ describe('App', () => {
     const unlockDialog = wrapper.getComponent(SecretUnlockDialog)
     unlockDialog.vm.$emit('unlock', 'master password')
     await flushPromises()
-    const unlockCalls = invoke.mock.calls.filter(([command]) => command === 'unlock_secrets').length
-    const recoveryCalls = invoke.mock.calls.filter(([command]) => command === 'recover_secrets').length
-    const setupCalls = invoke.mock.calls.filter(([command]) => command === 'initialize_secrets').length
+    const unlockCalls = invoke.mock.calls.filter(
+      ([command]) => command === 'unlock_secrets'
+    ).length
+    const recoveryCalls = invoke.mock.calls.filter(
+      ([command]) => command === 'recover_secrets'
+    ).length
+    const setupCalls = invoke.mock.calls.filter(
+      ([command]) => command === 'initialize_secrets'
+    ).length
 
     wrapper.getComponent(RecoveryCodesDialog).vm.$emit('close')
     unlockDialog.vm.$emit('unlock', 'master password')
     unlockDialog.vm.$emit('recover', 'recovery code', 'new master password')
-    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'different password')
+    wrapper
+      .getComponent(SecretSetupDialog)
+      .vm.$emit('setup', 'different password')
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')).toHaveLength(unlockCalls)
-    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(recoveryCalls)
-    expect(invoke.mock.calls.filter(([command]) => command === 'initialize_secrets')).toHaveLength(setupCalls)
-    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('PENDING-1')
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')
+    ).toHaveLength(unlockCalls)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'recover_secrets')
+    ).toHaveLength(recoveryCalls)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'initialize_secrets')
+    ).toHaveLength(setupCalls)
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain(
+      'PENDING-1'
+    )
     expect(wrapper.find('[data-testid="session-sidebar"]').exists()).toBe(false)
   })
 
@@ -577,7 +752,9 @@ describe('App', () => {
     })
     await openConfigMenu(wrapper)
     await wrapper.get('[data-testid="config-unlock"]').trigger('click')
-    wrapper.getComponent(SecretUnlockDialog).vm.$emit('unlock', 'master password')
+    wrapper
+      .getComponent(SecretUnlockDialog)
+      .vm.$emit('unlock', 'master password')
     await flushPromises()
     const codesDialog = wrapper.getComponent(RecoveryCodesDialog)
 
@@ -595,38 +772,64 @@ describe('App', () => {
   it('accepts recovery only after the open unlock dialog enters recovery mode', async () => {
     const wrapper = await mountAppWithSecretStatus({
       configured: true,
-      commandHandlers: { recover_secrets: async () => recoveryCodes('RECOVERED') },
+      commandHandlers: {
+        recover_secrets: async () => recoveryCodes('RECOVERED'),
+      },
     })
     await openConfigMenu(wrapper)
     await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
-    const recoveryCalls = invoke.mock.calls.filter(([command]) => command === 'recover_secrets').length
+    const recoveryCalls = invoke.mock.calls.filter(
+      ([command]) => command === 'recover_secrets'
+    ).length
 
     dialog.vm.$emit('recover', 'recovery code', 'new master password')
     await flushPromises()
-    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(recoveryCalls)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'recover_secrets')
+    ).toHaveLength(recoveryCalls)
 
     await dialog.get('[data-testid="show-recovery"]').trigger('click')
     dialog.vm.$emit('recover', 'recovery code', 'new master password')
     await flushPromises()
-    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(recoveryCalls + 1)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'recover_secrets')
+    ).toHaveLength(recoveryCalls + 1)
   })
 
   it('ignores secret events emitted from closed setup and unlock dialogs', async () => {
     const wrapper = await mountAppWithSecretStatus({ configured: true })
-    const setupCalls = invoke.mock.calls.filter(([command]) => command === 'initialize_secrets').length
-    const unlockCalls = invoke.mock.calls.filter(([command]) => command === 'unlock_secrets').length
-    const recoveryCalls = invoke.mock.calls.filter(([command]) => command === 'recover_secrets').length
+    const setupCalls = invoke.mock.calls.filter(
+      ([command]) => command === 'initialize_secrets'
+    ).length
+    const unlockCalls = invoke.mock.calls.filter(
+      ([command]) => command === 'unlock_secrets'
+    ).length
+    const recoveryCalls = invoke.mock.calls.filter(
+      ([command]) => command === 'recover_secrets'
+    ).length
 
-    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'hidden master password')
+    wrapper
+      .getComponent(SecretSetupDialog)
+      .vm.$emit('setup', 'hidden master password')
     const unlockDialog = wrapper.getComponent(SecretUnlockDialog)
     unlockDialog.vm.$emit('unlock', 'hidden master password')
-    unlockDialog.vm.$emit('recover', 'hidden recovery code', 'hidden replacement password')
+    unlockDialog.vm.$emit(
+      'recover',
+      'hidden recovery code',
+      'hidden replacement password'
+    )
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'initialize_secrets')).toHaveLength(setupCalls)
-    expect(invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')).toHaveLength(unlockCalls)
-    expect(invoke.mock.calls.filter(([command]) => command === 'recover_secrets')).toHaveLength(recoveryCalls)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'initialize_secrets')
+    ).toHaveLength(setupCalls)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')
+    ).toHaveLength(unlockCalls)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'recover_secrets')
+    ).toHaveLength(recoveryCalls)
   })
 
   it('ignores mode changes while recovery is in flight', async () => {
@@ -643,12 +846,16 @@ describe('App', () => {
     dialog.vm.$emit('mode-change', 'unlock')
     pendingRecovery.reject(new Error('recovery failed'))
     await flushPromises()
-    const unlockCalls = invoke.mock.calls.filter(([command]) => command === 'unlock_secrets').length
+    const unlockCalls = invoke.mock.calls.filter(
+      ([command]) => command === 'unlock_secrets'
+    ).length
 
     dialog.vm.$emit('unlock', 'master password')
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')).toHaveLength(unlockCalls)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'unlock_secrets')
+    ).toHaveLength(unlockCalls)
     expect(wrapper.get('[data-testid="recover-secrets-action"]')).toBeTruthy()
   })
 
@@ -657,15 +864,23 @@ describe('App', () => {
     const removeListener = vi.spyOn(window, 'removeEventListener')
     const wrapper = await mountAppWithSecretStatus({
       configured: false,
-      commandHandlers: { initialize_secrets: async () => recoveryCodes('UNSAVED') },
+      commandHandlers: {
+        initialize_secrets: async () => recoveryCodes('UNSAVED'),
+      },
     })
-    const registration = addListener.mock.calls.find(([type]) => type === 'beforeunload')
+    const registration = addListener.mock.calls.find(
+      ([type]) => type === 'beforeunload'
+    )
     expect(registration).toBeDefined()
     const handler = registration![1] as EventListener
 
-    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'new master password')
+    wrapper
+      .getComponent(SecretSetupDialog)
+      .vm.$emit('setup', 'new master password')
     await flushPromises()
-    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain('关闭窗口前请先保存并确认')
+    expect(wrapper.get('[aria-label="保存恢复码"]').text()).toContain(
+      '关闭窗口前请先保存并确认'
+    )
     const event = new Event('beforeunload', { cancelable: true })
     handler(event)
     expect(event.defaultPrevented).toBe(true)
@@ -683,9 +898,13 @@ describe('App', () => {
       configured: false,
       commandHandlers: { initialize_secrets: () => pendingSetup.promise },
     })
-    const handler = addListener.mock.calls.find(([type]) => type === 'beforeunload')![1] as EventListener
+    const handler = addListener.mock.calls.find(
+      ([type]) => type === 'beforeunload'
+    )![1] as EventListener
 
-    wrapper.getComponent(SecretSetupDialog).vm.$emit('setup', 'new master password')
+    wrapper
+      .getComponent(SecretSetupDialog)
+      .vm.$emit('setup', 'new master password')
     await wrapper.vm.$nextTick()
     const event = new Event('beforeunload', { cancelable: true })
     handler(event)
@@ -711,7 +930,9 @@ describe('App', () => {
         unlock_secrets: () => pendingUnlock.promise,
       },
     })
-    const handler = addListener.mock.calls.find(([type]) => type === 'beforeunload')![1] as EventListener
+    const handler = addListener.mock.calls.find(
+      ([type]) => type === 'beforeunload'
+    )![1] as EventListener
     await openConfigMenu(wrapper)
     await wrapper.get('[data-testid="config-unlock"]').trigger('click')
     const dialog = wrapper.getComponent(SecretUnlockDialog)
@@ -743,7 +964,11 @@ describe('App', () => {
   it('keeps recovery mode open and reports a recovery-specific safe error when recovery fails', async () => {
     const wrapper = await mountAppWithSecretStatus({
       configured: true,
-      commandHandlers: { recover_secrets: async () => { throw new Error('invalid code SECRET-INPUT') } },
+      commandHandlers: {
+        recover_secrets: async () => {
+          throw new Error('invalid code SECRET-INPUT')
+        },
+      },
     })
     await openConfigMenu(wrapper)
     await wrapper.get('[data-testid="config-unlock"]').trigger('click')
@@ -755,17 +980,28 @@ describe('App', () => {
     expect(wrapper.get('[aria-label="恢复本地凭据"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="recover-secrets-action"]')).toBeTruthy()
     expect(wrapper.find('[aria-label="保存恢复码"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('恢复本地凭据失败，请检查恢复码后重试。')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).not.toContain('SECRET-INPUT')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).not.toContain('NEW-MASTER-PASSWORD')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '恢复本地凭据失败，请检查恢复码后重试。'
+    )
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).not.toContain(
+      'SECRET-INPUT'
+    )
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).not.toContain(
+      'NEW-MASTER-PASSWORD'
+    )
   })
 
   it('creates a session in the group selected in the dialog', async () => {
-    const wrapper = await mountAppWithGroups([{ id: 'ops', name: '运维' }, { id: 'prod', name: '生产' }])
+    const wrapper = await mountAppWithGroups([
+      { id: 'ops', name: '运维' },
+      { id: 'prod', name: '生产' },
+    ])
     await wrapper.get('.create-session').trigger('click')
     await wrapper.get('select[aria-label="所属分组"]').setValue('prod')
     await wrapper.get('[data-testid="create-session-action"]').trigger('click')
-    expect(wrapper.findAll('.session-group')[1].text()).toContain('未命名 SSH 会话')
+    expect(wrapper.findAll('.session-group')[1].text()).toContain(
+      '未命名 SSH 会话'
+    )
   })
 
   it('shows SSH password input when password authentication is selected', async () => {
@@ -783,44 +1019,65 @@ describe('App', () => {
     open.mockResolvedValue('/Users/me/.ssh/id_ed25519')
     const config = {
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key' as const, path: '', passphraseSecretId: null })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'private_key' as const,
+          path: '',
+          passphraseSecretId: null,
+        }),
+      ],
       rules: [],
     }
-    invoke.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
-      if (command === 'load_config') return { schemaVersion: 1, ...config }
-      if (command === 'secret_store_status') return { configured: true }
-      if (command === 'load_preferences') return chinesePreferences
-      if (command === 'save_session_secret') {
-        return {
-          schemaVersion: 1,
-          ...config,
-          sessions: [session('session-a', 'group-a', {
-            kind: 'private_key' as const,
-            path: '/Users/me/.ssh/id_ed25519',
-            passphraseSecretId: 'secret-1',
-          })],
+    invoke.mockImplementation(
+      async (command: string, args?: Record<string, unknown>) => {
+        if (command === 'load_config') return { schemaVersion: 1, ...config }
+        if (command === 'secret_store_status') return { configured: true }
+        if (command === 'load_preferences') return chinesePreferences
+        if (command === 'save_session_secret') {
+          return {
+            schemaVersion: 1,
+            ...config,
+            sessions: [
+              session('session-a', 'group-a', {
+                kind: 'private_key' as const,
+                path: '/Users/me/.ssh/id_ed25519',
+                passphraseSecretId: 'secret-1',
+              }),
+            ],
+          }
         }
+        return undefined
       }
-      return undefined
-    })
+    )
     listen.mockResolvedValue(() => undefined)
     const wrapper = mountChineseApp()
     await flushPromises()
 
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
     await flushPromises()
-    await wrapper.get('[aria-label="私钥口令（可选）"]').setValue('key passphrase')
+    await wrapper
+      .get('[aria-label="私钥口令（可选）"]')
+      .setValue('key passphrase')
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
 
     expect(open).toHaveBeenCalledWith({ multiple: false, directory: false })
-    expect(invoke).toHaveBeenCalledWith('save_session_secret', { sessionId: 'session-a', secret: 'key passphrase' })
+    expect(invoke).toHaveBeenCalledWith('save_session_secret', {
+      sessionId: 'session-a',
+      secret: 'key passphrase',
+    })
   })
 
   it('allows entering and persists a private-key file path', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'private_key',
+          path: '/old/key',
+          passphraseSecretId: null,
+        }),
+      ],
       rules: [],
     })
 
@@ -831,8 +1088,14 @@ describe('App', () => {
     await privateKeyInput.trigger('change')
     await flushPromises()
 
-    const savedAuth = invoke.mock.calls.filter(([command]) => command === 'save_config').at(-1)![1].config.sessions[0].auth
-    expect(savedAuth).toEqual({ kind: 'private_key', path: '/Users/me/.ssh/id_ed25519', passphraseSecretId: null })
+    const savedAuth = invoke.mock.calls
+      .filter(([command]) => command === 'save_config')
+      .at(-1)![1].config.sessions[0].auth
+    expect(savedAuth).toEqual({
+      kind: 'private_key',
+      path: '/Users/me/.ssh/id_ed25519',
+      passphraseSecretId: null,
+    })
   })
 
   it('offers exactly password and private-key authentication modes', async () => {
@@ -843,14 +1106,22 @@ describe('App', () => {
     })
 
     const options = wrapper.findAll('select[aria-label="认证方式"] option')
-    expect(options.map((option) => option.attributes('value'))).toEqual(['password', 'private_key'])
+    expect(options.map((option) => option.attributes('value'))).toEqual([
+      'password',
+      'private_key',
+    ])
     expect(options.map((option) => option.text())).toEqual(['密码', '私钥'])
   })
 
   it('clears both local drafts and old secret IDs whenever authentication kind changes', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'password', secretId: 'password-secret' })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'password',
+          secretId: 'password-secret',
+        }),
+      ],
       rules: [],
     })
     await wrapper.get('[aria-label="SSH 密码"]').setValue('password draft')
@@ -858,28 +1129,50 @@ describe('App', () => {
     await wrapper.get('select[aria-label="认证方式"]').setValue('private_key')
     await flushPromises()
 
-    let savedAuth = invoke.mock.calls.filter(([command]) => command === 'save_config').at(-1)![1].config.sessions[0].auth
-    expect(savedAuth).toEqual({ kind: 'private_key', path: '', passphraseSecretId: null })
-    await wrapper.get('[aria-label="私钥口令（可选）"]').setValue('passphrase draft')
+    let savedAuth = invoke.mock.calls
+      .filter(([command]) => command === 'save_config')
+      .at(-1)![1].config.sessions[0].auth
+    expect(savedAuth).toEqual({
+      kind: 'private_key',
+      path: '',
+      passphraseSecretId: null,
+    })
+    await wrapper
+      .get('[aria-label="私钥口令（可选）"]')
+      .setValue('passphrase draft')
 
     await wrapper.get('select[aria-label="认证方式"]').setValue('password')
     await flushPromises()
 
-    savedAuth = invoke.mock.calls.filter(([command]) => command === 'save_config').at(-1)![1].config.sessions[0].auth
+    savedAuth = invoke.mock.calls
+      .filter(([command]) => command === 'save_config')
+      .at(-1)![1].config.sessions[0].auth
     expect(savedAuth).toEqual({ kind: 'password', secretId: null })
-    const secretCallsBeforeSave = invoke.mock.calls.filter(([command]) => command === 'save_session_secret').length
+    const secretCallsBeforeSave = invoke.mock.calls.filter(
+      ([command]) => command === 'save_session_secret'
+    ).length
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_session_secret')).toHaveLength(secretCallsBeforeSave)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_session_secret')
+    ).toHaveLength(secretCallsBeforeSave)
   })
 
   it('ignores cancelled and non-string private-key picker results', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'private_key',
+          path: '/old/key',
+          passphraseSecretId: null,
+        }),
+      ],
       rules: [],
     })
-    const savesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+    const savesBeforePick = invoke.mock.calls.filter(
+      ([command]) => command === 'save_config'
+    ).length
 
     open.mockResolvedValueOnce(null).mockResolvedValueOnce(['/unexpected/key'])
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
@@ -887,8 +1180,12 @@ describe('App', () => {
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
     await flushPromises()
 
-    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/old/key')
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(savesBeforePick)
+    expect(
+      (wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value
+    ).toBe('/old/key')
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_config')
+    ).toHaveLength(savesBeforePick)
   })
 
   it('blocks authentication saving until a pending private-key selection is persisted', async () => {
@@ -896,12 +1193,24 @@ describe('App', () => {
     open.mockReturnValue(pendingOpen.promise)
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'private_key',
+          path: '/old/key',
+          passphraseSecretId: null,
+        }),
+      ],
       rules: [],
     })
-    await wrapper.get('[aria-label="私钥口令（可选）"]').setValue('key passphrase')
-    const configSavesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_config').length
-    const secretSavesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_session_secret').length
+    await wrapper
+      .get('[aria-label="私钥口令（可选）"]')
+      .setValue('key passphrase')
+    const configSavesBeforePick = invoke.mock.calls.filter(
+      ([command]) => command === 'save_config'
+    ).length
+    const secretSavesBeforePick = invoke.mock.calls.filter(
+      ([command]) => command === 'save_session_secret'
+    ).length
 
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
     await wrapper.vm.$nextTick()
@@ -910,16 +1219,24 @@ describe('App', () => {
     await saveButton.trigger('click')
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(configSavesBeforePick)
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_session_secret')).toHaveLength(secretSavesBeforePick)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_config')
+    ).toHaveLength(configSavesBeforePick)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_session_secret')
+    ).toHaveLength(secretSavesBeforePick)
 
     pendingOpen.resolve('/new/key')
     await flushPromises()
 
-    const pickerSaves = invoke.mock.calls.filter(([command]) => command === 'save_config').slice(configSavesBeforePick)
+    const pickerSaves = invoke.mock.calls
+      .filter(([command]) => command === 'save_config')
+      .slice(configSavesBeforePick)
     expect(pickerSaves).toHaveLength(1)
     expect(pickerSaves[0][1].config.sessions[0].auth.path).toBe('/new/key')
-    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/new/key')
+    expect(
+      (wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value
+    ).toBe('/new/key')
   })
 
   it('blocks generic config writes while a private-key picker operation is pending', async () => {
@@ -927,77 +1244,134 @@ describe('App', () => {
     open.mockReturnValue(pendingOpen.promise)
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'private_key',
+          path: '/old/key',
+          passphraseSecretId: null,
+        }),
+      ],
       rules: [],
     })
-    const configSavesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+    const configSavesBeforePick = invoke.mock.calls.filter(
+      ([command]) => command === 'save_config'
+    ).length
 
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
-    const hostInput = wrapper.findAll('.editor-fields > label').find((label) => label.text().includes('主机地址'))!.get('input')
-    expect(wrapper.get('[data-testid="app-interactions"]').attributes('disabled')).toBeDefined()
+    const hostInput = wrapper
+      .findAll('.editor-fields > label')
+      .find((label) => label.text().includes('主机地址'))!
+      .get('input')
+    expect(
+      wrapper.get('[data-testid="app-interactions"]').attributes('disabled')
+    ).toBeDefined()
     await hostInput.setValue('racing.example.com')
     await hostInput.trigger('change')
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(configSavesBeforePick)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_config')
+    ).toHaveLength(configSavesBeforePick)
 
     pendingOpen.resolve('/new/key')
     await flushPromises()
-    const pickerSaves = invoke.mock.calls.filter(([command]) => command === 'save_config').slice(configSavesBeforePick)
+    const pickerSaves = invoke.mock.calls
+      .filter(([command]) => command === 'save_config')
+      .slice(configSavesBeforePick)
     expect(pickerSaves).toHaveLength(1)
     expect(pickerSaves[0][1].config.sessions[0].auth.path).toBe('/new/key')
   })
 
   it('does not start a private-key picker while another config write is pending', async () => {
     const pendingSave = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
-      rules: [],
-    }, [], { save_config: () => pendingSave.promise })
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [
+          session('session-a', 'group-a', {
+            kind: 'private_key',
+            path: '/old/key',
+            passphraseSecretId: null,
+          }),
+        ],
+        rules: [],
+      },
+      [],
+      { save_config: () => pendingSave.promise }
+    )
     const opensBeforeEdit = open.mock.calls.length
-    const hostInput = wrapper.findAll('.editor-fields > label').find((label) => label.text().includes('主机地址'))!.get('input')
+    const hostInput = wrapper
+      .findAll('.editor-fields > label')
+      .find((label) => label.text().includes('主机地址'))!
+      .get('input')
 
     await hostInput.setValue('saved-first.example.com')
     await hostInput.trigger('change')
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
 
     expect(open).toHaveBeenCalledTimes(opensBeforeEdit)
-    expect(wrapper.get('[data-testid="choose-private-key"]').attributes('disabled')).toBeDefined()
+    expect(
+      wrapper.get('[data-testid="choose-private-key"]').attributes('disabled')
+    ).toBeDefined()
 
     pendingSave.resolve()
     await flushPromises()
-    expect(wrapper.get('[data-testid="choose-private-key"]').attributes('disabled')).toBeUndefined()
+    expect(
+      wrapper.get('[data-testid="choose-private-key"]').attributes('disabled')
+    ).toBeUndefined()
   })
 
   it('queues ordinary config edits made while an earlier config write is pending', async () => {
     const firstSave = deferred()
     let saveCount = 0
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
-      rules: [],
-    }, [], {
-      save_config: () => {
-        saveCount += 1
-        return saveCount === 1 ? firstSave.promise : Promise.resolve()
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [
+          session('session-a', 'group-a', {
+            kind: 'private_key',
+            path: '/old/key',
+            passphraseSecretId: null,
+          }),
+        ],
+        rules: [],
       },
-    })
-    const savesBeforeEdit = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+      [],
+      {
+        save_config: () => {
+          saveCount += 1
+          return saveCount === 1 ? firstSave.promise : Promise.resolve()
+        },
+      }
+    )
+    const savesBeforeEdit = invoke.mock.calls.filter(
+      ([command]) => command === 'save_config'
+    ).length
     const editorLabels = wrapper.findAll('.editor-fields > label')
-    const hostInput = editorLabels.find((label) => label.text().includes('主机地址'))!.get('input')
-    const nameInput = editorLabels.find((label) => label.text().includes('会话名称'))!.get('input')
+    const hostInput = editorLabels
+      .find((label) => label.text().includes('主机地址'))!
+      .get('input')
+    const nameInput = editorLabels
+      .find((label) => label.text().includes('会话名称'))!
+      .get('input')
 
     await hostInput.setValue('queued.example.com')
     await nameInput.setValue('排队保存')
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(savesBeforeEdit + 1)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_config')
+    ).toHaveLength(savesBeforeEdit + 1)
 
     firstSave.resolve()
     await flushPromises()
 
-    const configSaves = invoke.mock.calls.filter(([command]) => command === 'save_config').slice(savesBeforeEdit)
+    const configSaves = invoke.mock.calls
+      .filter(([command]) => command === 'save_config')
+      .slice(savesBeforeEdit)
     expect(configSaves).toHaveLength(2)
-    expect(configSaves[1][1].config.sessions[0]).toMatchObject({ host: 'queued.example.com', name: '排队保存' })
+    expect(configSaves[1][1].config.sessions[0]).toMatchObject({
+      host: 'queued.example.com',
+      name: '排队保存',
+    })
   })
 
   it('allows only one private-key picker operation at a time', async () => {
@@ -1005,7 +1379,13 @@ describe('App', () => {
     open.mockReturnValue(pendingOpen.promise)
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'private_key',
+          path: '/old/key',
+          passphraseSecretId: null,
+        }),
+      ],
       rules: [],
     })
     const opensBeforePick = open.mock.calls.length
@@ -1019,53 +1399,89 @@ describe('App', () => {
 
     pendingOpen.resolve('/new/key')
     await flushPromises()
-    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/new/key')
+    expect(
+      (wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value
+    ).toBe('/new/key')
   })
 
   it('preserves the private-key path and reports a specific error when the picker fails', async () => {
     open.mockRejectedValue(new Error('dialog unavailable'))
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'private_key',
+          path: '/old/key',
+          passphraseSecretId: null,
+        }),
+      ],
       rules: [],
     })
-    const savesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+    const savesBeforePick = invoke.mock.calls.filter(
+      ([command]) => command === 'save_config'
+    ).length
 
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
     await flushPromises()
 
-    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/old/key')
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(savesBeforePick)
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('选择私钥文件失败，请重试。')
+    expect(
+      (wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value
+    ).toBe('/old/key')
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_config')
+    ).toHaveLength(savesBeforePick)
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '选择私钥文件失败，请重试。'
+    )
   })
 
   it('restores the previous private-key path when picker persistence fails', async () => {
     open.mockResolvedValue('/new/key')
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key', path: '/old/key', passphraseSecretId: null })],
-      rules: [],
-    }, 'save_config')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [
+          session('session-a', 'group-a', {
+            kind: 'private_key',
+            path: '/old/key',
+            passphraseSecretId: null,
+          }),
+        ],
+        rules: [],
+      },
+      'save_config'
+    )
 
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
     await flushPromises()
 
-    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/old/key')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('保存失败，请检查会话和规则填写是否完整。')
+    expect(
+      (wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value
+    ).toBe('/old/key')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '保存失败，请检查会话和规则填写是否完整。'
+    )
   })
 
   it('persists a selected private-key path before submitting its passphrase', async () => {
     open.mockResolvedValue('/Users/me/.ssh/id_rsa')
     const config = {
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'private_key' as const, path: '', passphraseSecretId: null })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'private_key' as const,
+          path: '',
+          passphraseSecretId: null,
+        }),
+      ],
       rules: [],
     }
     invoke.mockImplementation(async (command: string) => {
       if (command === 'load_config') return { schemaVersion: 1, ...config }
       if (command === 'secret_store_status') return { configured: true }
       if (command === 'load_preferences') return chinesePreferences
-      if (command === 'save_session_secret') return { schemaVersion: 1, ...config }
+      if (command === 'save_session_secret')
+        return { schemaVersion: 1, ...config }
       return undefined
     })
     listen.mockResolvedValue(() => undefined)
@@ -1079,26 +1495,48 @@ describe('App', () => {
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
 
-    const authCalls = invoke.mock.calls.slice(callsBeforePick).filter(([command]) => command === 'save_config' || command === 'save_session_secret')
-    expect(authCalls.map(([command]) => command)).toEqual(['save_config', 'save_config', 'save_session_secret'])
-    expect(authCalls[0][1].config.sessions[0].auth.path).toBe('/Users/me/.ssh/id_rsa')
+    const authCalls = invoke.mock.calls
+      .slice(callsBeforePick)
+      .filter(
+        ([command]) =>
+          command === 'save_config' || command === 'save_session_secret'
+      )
+    expect(authCalls.map(([command]) => command)).toEqual([
+      'save_config',
+      'save_config',
+      'save_session_secret',
+    ])
+    expect(authCalls[0][1].config.sessions[0].auth.path).toBe(
+      '/Users/me/.ssh/id_rsa'
+    )
   })
 
   it('uses trim only to detect blank passwords and submits nonblank whitespace verbatim', async () => {
     const config = {
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'password' as const, secretId: null })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'password' as const,
+          secretId: null,
+        }),
+      ],
       rules: [],
     }
     invoke.mockImplementation(async (command: string) => {
       if (command === 'load_config') return { schemaVersion: 1, ...config }
       if (command === 'secret_store_status') return { configured: true }
       if (command === 'load_preferences') return chinesePreferences
-      if (command === 'save_session_secret') return {
-        schemaVersion: 1,
-        ...config,
-        sessions: [session('session-a', 'group-a', { kind: 'password', secretId: 'saved-secret' })],
-      }
+      if (command === 'save_session_secret')
+        return {
+          schemaVersion: 1,
+          ...config,
+          sessions: [
+            session('session-a', 'group-a', {
+              kind: 'password',
+              secretId: 'saved-secret',
+            }),
+          ],
+        }
       return undefined
     })
     listen.mockResolvedValue(() => undefined)
@@ -1109,65 +1547,104 @@ describe('App', () => {
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
 
-    expect(invoke).toHaveBeenCalledWith('save_session_secret', { sessionId: 'session-a', secret: '  valid password  ' })
-    expect((wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value).toBe('')
+    expect(invoke).toHaveBeenCalledWith('save_session_secret', {
+      sessionId: 'session-a',
+      secret: '  valid password  ',
+    })
+    expect(
+      (wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value
+    ).toBe('')
   })
 
   it('persists config but never overwrites an existing secret with a blank draft', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a', { kind: 'password', secretId: 'existing-secret' })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'password',
+          secretId: 'existing-secret',
+        }),
+      ],
       rules: [],
     })
     await wrapper.get('[aria-label="SSH 密码"]').setValue('   ')
-    const secretCallsBeforeSave = invoke.mock.calls.filter(([command]) => command === 'save_session_secret').length
+    const secretCallsBeforeSave = invoke.mock.calls.filter(
+      ([command]) => command === 'save_session_secret'
+    ).length
 
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_session_secret')).toHaveLength(secretCallsBeforeSave)
-    const savedAuth = invoke.mock.calls.filter(([command]) => command === 'save_config').at(-1)![1].config.sessions[0].auth
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_session_secret')
+    ).toHaveLength(secretCallsBeforeSave)
+    const savedAuth = invoke.mock.calls
+      .filter(([command]) => command === 'save_config')
+      .at(-1)![1].config.sessions[0].auth
     expect(savedAuth).toEqual({ kind: 'password', secretId: 'existing-secret' })
-    expect((wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value).toBe('')
+    expect(
+      (wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value
+    ).toBe('')
   })
 
   it('retains the draft and reports an authentication-specific error when config saving fails', async () => {
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, 'save_config')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      'save_config'
+    )
     await wrapper.get('[aria-label="SSH 密码"]').setValue('retry config')
-    const secretCallsBeforeSave = invoke.mock.calls.filter(([command]) => command === 'save_session_secret').length
+    const secretCallsBeforeSave = invoke.mock.calls.filter(
+      ([command]) => command === 'save_session_secret'
+    ).length
 
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
 
-    expect((wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value).toBe('retry config')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('保存认证配置失败，请重试。')
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_session_secret')).toHaveLength(secretCallsBeforeSave)
+    expect(
+      (wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value
+    ).toBe('retry config')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '保存认证配置失败，请重试。'
+    )
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_session_secret')
+    ).toHaveLength(secretCallsBeforeSave)
   })
 
   it('retains the password draft for retry and shows a specific error when secret saving fails', async () => {
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, 'save_session_secret')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      'save_session_secret'
+    )
     await wrapper.get('[aria-label="SSH 密码"]').setValue('retry me')
 
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
 
-    expect((wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value).toBe('retry me')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('保存认证凭据失败，请重试。')
+    expect(
+      (wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value
+    ).toBe('retry me')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '保存认证凭据失败，请重试。'
+    )
   })
 
   it('submits the captured secret to its originating session when selection changes during config saving', async () => {
     const pendingSave = deferred()
     const config = {
       groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a'), session('session-b', 'group-a')],
+      sessions: [
+        session('session-a', 'group-a'),
+        session('session-b', 'group-a'),
+      ],
       rules: [],
     }
     const wrapper = await mountAppWithConfig(config, [], {
@@ -1177,34 +1654,52 @@ describe('App', () => {
     await wrapper.get('[aria-label="SSH 密码"]').setValue('session-a secret')
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
 
-    await wrapper.get('[data-testid="session-child-session-b"]').trigger('click')
+    await wrapper
+      .get('[data-testid="session-child-session-b"]')
+      .trigger('click')
     await wrapper.get('[aria-label="SSH 密码"]').setValue('session-b draft')
     pendingSave.resolve()
     await flushPromises()
 
-    expect(invoke).toHaveBeenCalledWith('save_session_secret', { sessionId: 'session-a', secret: 'session-a secret' })
-    expect((wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value).toBe('session-b draft')
+    expect(invoke).toHaveBeenCalledWith('save_session_secret', {
+      sessionId: 'session-a',
+      secret: 'session-a secret',
+    })
+    expect(
+      (wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value
+    ).toBe('session-b draft')
   })
 
   it('blocks authentication mode changes while config saving is pending', async () => {
     const pendingSave = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, [], { save_config: () => pendingSave.promise })
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      [],
+      { save_config: () => pendingSave.promise }
+    )
     await wrapper.get('[aria-label="SSH 密码"]').setValue('password secret')
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     const selector = wrapper.get('select[aria-label="认证方式"]')
-    const configCallsBeforeChange = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+    const configCallsBeforeChange = invoke.mock.calls.filter(
+      ([command]) => command === 'save_config'
+    ).length
 
     expect(selector.attributes('disabled')).toBeDefined()
     await selector.setValue('private_key')
     pendingSave.resolve()
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(configCallsBeforeChange)
-    expect(invoke).toHaveBeenCalledWith('save_session_secret', { sessionId: 'session-a', secret: 'password secret' })
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_config')
+    ).toHaveLength(configCallsBeforeChange)
+    expect(invoke).toHaveBeenCalledWith('save_session_secret', {
+      sessionId: 'session-a',
+      secret: 'password secret',
+    })
   })
 
   it('blocks authentication mode changes while secret submission is pending', async () => {
@@ -1214,19 +1709,25 @@ describe('App', () => {
       sessions: [session('session-a', 'group-a')],
       rules: [],
     }
-    const wrapper = await mountAppWithConfig(config, [], { save_session_secret: () => pendingSecret.promise })
+    const wrapper = await mountAppWithConfig(config, [], {
+      save_session_secret: () => pendingSecret.promise,
+    })
     await wrapper.get('[aria-label="SSH 密码"]').setValue('pending secret')
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
     const selector = wrapper.get('select[aria-label="认证方式"]')
-    const configCallsBeforeChange = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+    const configCallsBeforeChange = invoke.mock.calls.filter(
+      ([command]) => command === 'save_config'
+    ).length
 
     expect(selector.attributes('disabled')).toBeDefined()
     await selector.setValue('private_key')
     await flushPromises()
 
     expect(wrapper.get('[aria-label="SSH 密码"]')).toBeTruthy()
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(configCallsBeforeChange)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_config')
+    ).toHaveLength(configCallsBeforeChange)
 
     pendingSecret.resolve({ schemaVersion: 1, ...config })
     await flushPromises()
@@ -1240,24 +1741,40 @@ describe('App', () => {
       sessions: [session('session-a', 'group-a')],
       rules: [],
     }
-    const wrapper = await mountAppWithConfig(config, [], { save_session_secret: () => pendingSecret.promise })
+    const wrapper = await mountAppWithConfig(config, [], {
+      save_session_secret: () => pendingSecret.promise,
+    })
     await wrapper.get('[aria-label="SSH 密码"]').setValue('pending secret')
     await wrapper.get('[data-testid="save-authentication"]').trigger('click')
     await flushPromises()
-    const configCallsBeforeEdit = invoke.mock.calls.filter(([command]) => command === 'save_config').length
-    const hostInput = wrapper.findAll('.editor-fields > label').find((label) => label.text().includes('主机地址'))!.get('input')
+    const configCallsBeforeEdit = invoke.mock.calls.filter(
+      ([command]) => command === 'save_config'
+    ).length
+    const hostInput = wrapper
+      .findAll('.editor-fields > label')
+      .find((label) => label.text().includes('主机地址'))!
+      .get('input')
 
-    expect(wrapper.get('[data-testid="app-interactions"]').attributes('disabled')).toBeDefined()
+    expect(
+      wrapper.get('[data-testid="app-interactions"]').attributes('disabled')
+    ).toBeDefined()
     await hostInput.setValue('racing.example.com')
     await hostInput.trigger('change')
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(configCallsBeforeEdit)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_config')
+    ).toHaveLength(configCallsBeforeEdit)
 
     pendingSecret.resolve({
       schemaVersion: 1,
       ...config,
-      sessions: [session('session-a', 'group-a', { kind: 'password', secretId: 'secret-1' })],
+      sessions: [
+        session('session-a', 'group-a', {
+          kind: 'password',
+          secretId: 'secret-1',
+        }),
+      ],
     })
     await flushPromises()
     expect(hostInput.element.value).toBe('localhost')
@@ -1267,19 +1784,33 @@ describe('App', () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
       sessions: [
-        session('session-a', 'group-a', { kind: 'password', secretId: 'secret-a' }),
-        session('session-b', 'group-a', { kind: 'password', secretId: 'secret-b' }),
+        session('session-a', 'group-a', {
+          kind: 'password',
+          secretId: 'secret-a',
+        }),
+        session('session-b', 'group-a', {
+          kind: 'password',
+          secretId: 'secret-b',
+        }),
       ],
       rules: [],
     })
     await wrapper.get('[aria-label="SSH 密码"]').setValue('session-a draft')
 
-    await wrapper.get('[data-testid="session-child-session-b"]').trigger('click')
-    expect((wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value).toBe('')
+    await wrapper
+      .get('[data-testid="session-child-session-b"]')
+      .trigger('click')
+    expect(
+      (wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value
+    ).toBe('')
     await wrapper.get('[aria-label="SSH 密码"]').setValue('session-b draft')
-    await wrapper.get('[data-testid="session-child-session-a"]').trigger('click')
+    await wrapper
+      .get('[data-testid="session-child-session-a"]')
+      .trigger('click')
 
-    expect((wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value).toBe('')
+    expect(
+      (wrapper.get('[aria-label="SSH 密码"]').element as HTMLInputElement).value
+    ).toBe('')
   })
 
   it('ignores a private-key picker result when selection changes while the dialog is open', async () => {
@@ -1288,20 +1819,36 @@ describe('App', () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],
       sessions: [
-        session('session-a', 'group-a', { kind: 'private_key', path: '/keys/a', passphraseSecretId: null }),
-        session('session-b', 'group-a', { kind: 'private_key', path: '/keys/b', passphraseSecretId: null }),
+        session('session-a', 'group-a', {
+          kind: 'private_key',
+          path: '/keys/a',
+          passphraseSecretId: null,
+        }),
+        session('session-b', 'group-a', {
+          kind: 'private_key',
+          path: '/keys/b',
+          passphraseSecretId: null,
+        }),
       ],
       rules: [],
     })
-    const savesBeforePick = invoke.mock.calls.filter(([command]) => command === 'save_config').length
+    const savesBeforePick = invoke.mock.calls.filter(
+      ([command]) => command === 'save_config'
+    ).length
     await wrapper.get('[data-testid="choose-private-key"]').trigger('click')
 
-    await wrapper.get('[data-testid="session-child-session-b"]').trigger('click')
+    await wrapper
+      .get('[data-testid="session-child-session-b"]')
+      .trigger('click')
     pendingOpen.resolve('/keys/new-a')
     await flushPromises()
 
-    expect((wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value).toBe('/keys/b')
-    expect(invoke.mock.calls.filter(([command]) => command === 'save_config')).toHaveLength(savesBeforePick)
+    expect(
+      (wrapper.get('[aria-label="私钥文件"]').element as HTMLInputElement).value
+    ).toBe('/keys/b')
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'save_config')
+    ).toHaveLength(savesBeforePick)
   })
 
   it('keeps generic session field persistence functional beside authentication editing', async () => {
@@ -1311,12 +1858,17 @@ describe('App', () => {
       rules: [],
     })
 
-    const hostInput = wrapper.findAll('.editor-fields > label').find((label) => label.text().includes('主机地址'))!.get('input')
+    const hostInput = wrapper
+      .findAll('.editor-fields > label')
+      .find((label) => label.text().includes('主机地址'))!
+      .get('input')
     await hostInput.setValue('ssh.example.com')
     await hostInput.trigger('change')
     await flushPromises()
 
-    const savedSession = invoke.mock.calls.filter(([command]) => command === 'save_config').at(-1)![1].config.sessions[0]
+    const savedSession = invoke.mock.calls
+      .filter(([command]) => command === 'save_config')
+      .at(-1)![1].config.sessions[0]
     expect(savedSession.host).toBe('ssh.example.com')
   })
 
@@ -1324,14 +1876,20 @@ describe('App', () => {
     const wrapper = mountAppWithPendingConfig()
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.get('[data-testid="backend-dot"]').classes()).toContain('backend-connecting')
+    expect(wrapper.get('[data-testid="backend-dot"]').classes()).toContain(
+      'backend-connecting'
+    )
   })
 
   it('shows a failed status when initialization cannot register the runtime listener', async () => {
     const wrapper = await mountAppWithListenerFailure()
 
-    expect(wrapper.get('[data-testid="backend-dot"]').classes()).toContain('backend-failed')
-    expect(wrapper.get('[data-testid="backend-dot"]').attributes('aria-label')).toBe('无法连接本地后端')
+    expect(wrapper.get('[data-testid="backend-dot"]').classes()).toContain(
+      'backend-failed'
+    )
+    expect(
+      wrapper.get('[data-testid="backend-dot"]').attributes('aria-label')
+    ).toBe('无法连接本地后端')
   })
 
   it('opens an application confirmation dialog before deleting a forwarding rule', async () => {
@@ -1359,7 +1917,9 @@ describe('App', () => {
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
     await flushPromises()
 
-    expect(invoke.mock.calls.slice(callsBeforeConfirm).map(([command]) => command)).toEqual(['stop_rule', 'delete_rule'])
+    expect(
+      invoke.mock.calls.slice(callsBeforeConfirm).map(([command]) => command)
+    ).toEqual(['stop_rule', 'delete_rule'])
     expect(invoke).toHaveBeenCalledWith('stop_rule', { ruleId: 'rule-a' })
     expect(invoke).toHaveBeenCalledWith('delete_rule', { ruleId: 'rule-a' })
     expect(wrapper.find('[title="删除规则"]').exists()).toBe(false)
@@ -1367,11 +1927,14 @@ describe('App', () => {
   })
 
   it('retains the rule and confirmation context when backend rule deletion fails', async () => {
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [rule('rule-a', 'session-a')],
-    }, 'delete_rule')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [rule('rule-a', 'session-a')],
+      },
+      'delete_rule'
+    )
     await wrapper.get('[title="删除规则"]').trigger('click')
 
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
@@ -1379,7 +1942,9 @@ describe('App', () => {
 
     expect(wrapper.find('[title="删除规则"]').exists()).toBe(true)
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除转发规则')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除规则失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '删除规则失败，请重试。'
+    )
   })
 
   it('reloads backend configuration when a missing rule rejects deletion', async () => {
@@ -1404,15 +1969,20 @@ describe('App', () => {
 
     expect(loadCount).toBe(2)
     expect(wrapper.find('[title="删除规则"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除规则失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '删除规则失败，请重试。'
+    )
   })
 
   it('continues deleting a running rule when its best-effort stop fails', async () => {
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [rule('rule-a', 'session-a', 'active')],
-    }, 'stop_rule')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [rule('rule-a', 'session-a', 'active')],
+      },
+      'stop_rule'
+    )
     await wrapper.get('[title="删除规则"]').trigger('click')
 
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
@@ -1424,13 +1994,19 @@ describe('App', () => {
 
   it('keeps a failed rule deletion pending when cancel and confirm are repeated in flight', async () => {
     const pendingDelete = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [rule('rule-a', 'session-a')],
-    }, [], { delete_rule: () => pendingDelete.promise })
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [rule('rule-a', 'session-a')],
+      },
+      [],
+      { delete_rule: () => pendingDelete.promise }
+    )
     await wrapper.get('[title="删除规则"]').trigger('click')
-    const deletesBeforeConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_rule').length
+    const deletesBeforeConfirm = invoke.mock.calls.filter(
+      ([command]) => command === 'delete_rule'
+    ).length
 
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
     const dialog = openConfirmDialog(wrapper)
@@ -1439,20 +2015,35 @@ describe('App', () => {
     await wrapper.vm.$nextTick()
 
     expect(dialog.props('busy')).toBe(true)
-    expect(invoke.mock.calls.filter(([command]) => command === 'delete_rule')).toHaveLength(deletesBeforeConfirm + 1)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'delete_rule')
+    ).toHaveLength(deletesBeforeConfirm + 1)
 
     pendingDelete.reject(new Error('delete failed'))
     await flushPromises()
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除转发规则')
     expect(wrapper.get('[title="删除规则"]')).toBeTruthy()
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除规则失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '删除规则失败，请重试。'
+    )
   })
 
   it('confirms a group cascade with exact session and rule counts before deleting', async () => {
     const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }, { id: 'group-b', name: '分组 B' }],
-      sessions: [session('session-a', 'group-a'), session('session-b', 'group-a'), session('session-c', 'group-b')],
-      rules: [rule('rule-a', 'session-a'), rule('rule-b', 'session-a'), rule('rule-c', 'session-c')],
+      groups: [
+        { id: 'group-a', name: '分组 A' },
+        { id: 'group-b', name: '分组 B' },
+      ],
+      sessions: [
+        session('session-a', 'group-a'),
+        session('session-b', 'group-a'),
+        session('session-c', 'group-b'),
+      ],
+      rules: [
+        rule('rule-a', 'session-a'),
+        rule('rule-b', 'session-a'),
+        rule('rule-c', 'session-c'),
+      ],
     })
 
     await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
@@ -1466,8 +2057,15 @@ describe('App', () => {
 
   it('disconnects affected sessions best effort and removes only the confirmed group cascade', async () => {
     const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }, { id: 'group-b', name: '分组 B' }],
-      sessions: [session('session-a', 'group-a'), session('session-b', 'group-a'), session('session-c', 'group-b')],
+      groups: [
+        { id: 'group-a', name: '分组 A' },
+        { id: 'group-b', name: '分组 B' },
+      ],
+      sessions: [
+        session('session-a', 'group-a'),
+        session('session-b', 'group-a'),
+        session('session-c', 'group-b'),
+      ],
       rules: [rule('rule-a', 'session-a'), rule('rule-c', 'session-c')],
     })
     await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
@@ -1476,27 +2074,43 @@ describe('App', () => {
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
     await flushPromises()
 
-    expect(invoke.mock.calls.slice(callsBeforeConfirm).map(([command]) => command)).toEqual([
-      'disconnect_session',
-      'disconnect_session',
-      'delete_group',
-    ])
-    expect(invoke).toHaveBeenCalledWith('disconnect_session', { sessionId: 'session-a' })
-    expect(invoke).toHaveBeenCalledWith('disconnect_session', { sessionId: 'session-b' })
+    expect(
+      invoke.mock.calls.slice(callsBeforeConfirm).map(([command]) => command)
+    ).toEqual(['disconnect_session', 'disconnect_session', 'delete_group'])
+    expect(invoke).toHaveBeenCalledWith('disconnect_session', {
+      sessionId: 'session-a',
+    })
+    expect(invoke).toHaveBeenCalledWith('disconnect_session', {
+      sessionId: 'session-b',
+    })
     expect(invoke).toHaveBeenCalledWith('delete_group', { groupId: 'group-a' })
-    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(
+      false
+    )
     expect(wrapper.get('[data-testid="group-toggle-group-b"]')).toBeTruthy()
     expect(wrapper.text()).toContain('会话 session-c')
-    expect((wrapper.get('input[aria-label="备注"]').element as HTMLInputElement).value).toBe('rule-c')
+    expect(
+      (wrapper.get('input[aria-label="备注"]').element as HTMLInputElement)
+        .value
+    ).toBe('rule-c')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
 
   it('preserves the group cascade and pending selection when backend group deletion fails', async () => {
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }, { id: 'group-b', name: '分组 B' }],
-      sessions: [session('session-a', 'group-a'), session('session-b', 'group-b')],
-      rules: [rule('rule-a', 'session-a')],
-    }, 'delete_group')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [
+          { id: 'group-a', name: '分组 A' },
+          { id: 'group-b', name: '分组 B' },
+        ],
+        sessions: [
+          session('session-a', 'group-a'),
+          session('session-b', 'group-b'),
+        ],
+        rules: [rule('rule-a', 'session-a')],
+      },
+      'delete_group'
+    )
     await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
 
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
@@ -1506,25 +2120,35 @@ describe('App', () => {
     expect(wrapper.text()).toContain('会话 session-a')
     expect(wrapper.get('.session-header h1').text()).toBe('会话 session-a')
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除分组')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除分组失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '删除分组失败，请重试。'
+    )
   })
 
   it('reloads backend configuration when a missing group rejects deletion', async () => {
     const initialConfig = {
-      groups: [{ id: 'group-a', name: '分组 A' }, { id: 'group-b', name: '分组 B' }],
-      sessions: [session('session-a', 'group-a'), session('session-b', 'group-b')],
+      groups: [
+        { id: 'group-a', name: '分组 A' },
+        { id: 'group-b', name: '分组 B' },
+      ],
+      sessions: [
+        session('session-a', 'group-a'),
+        session('session-b', 'group-b'),
+      ],
       rules: [rule('rule-a', 'session-a'), rule('rule-b', 'session-b')],
     }
     let loadCount = 0
     const wrapper = await mountAppWithConfig(initialConfig, 'delete_group', {
       load_config: async () => {
         loadCount += 1
-        return loadCount === 1 ? { schemaVersion: 1, ...initialConfig } : {
-          schemaVersion: 1,
-          groups: [initialConfig.groups[1]],
-          sessions: [initialConfig.sessions[1]],
-          rules: [initialConfig.rules[1]],
-        }
+        return loadCount === 1
+          ? { schemaVersion: 1, ...initialConfig }
+          : {
+              schemaVersion: 1,
+              groups: [initialConfig.groups[1]],
+              sessions: [initialConfig.sessions[1]],
+              rules: [initialConfig.rules[1]],
+            }
       },
     })
     await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
@@ -1533,36 +2157,51 @@ describe('App', () => {
     await flushPromises()
 
     expect(loadCount).toBe(2)
-    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(
+      false
+    )
     expect(wrapper.get('[data-testid="group-toggle-group-b"]')).toBeTruthy()
     expect(wrapper.get('.session-header h1').text()).toBe('会话 session-b')
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除分组失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '删除分组失败，请重试。'
+    )
   })
 
   it('continues deleting a group when best-effort session disconnects fail', async () => {
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, 'disconnect_session')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      'disconnect_session'
+    )
     await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
 
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
     await flushPromises()
 
     expect(invoke).toHaveBeenCalledWith('delete_group', { groupId: 'group-a' })
-    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(
+      false
+    )
   })
 
   it('keeps a failed group deletion pending when cancel and confirm are repeated in flight', async () => {
     const pendingDelete = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [rule('rule-a', 'session-a')],
-    }, [], { delete_group: () => pendingDelete.promise })
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [rule('rule-a', 'session-a')],
+      },
+      [],
+      { delete_group: () => pendingDelete.promise }
+    )
     await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
-    const deletesBeforeConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_group').length
+    const deletesBeforeConfirm = invoke.mock.calls.filter(
+      ([command]) => command === 'delete_group'
+    ).length
 
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
     await flushPromises()
@@ -1572,19 +2211,24 @@ describe('App', () => {
     await wrapper.vm.$nextTick()
 
     expect(dialog.props('busy')).toBe(true)
-    expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeConfirm + 1)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'delete_group')
+    ).toHaveLength(deletesBeforeConfirm + 1)
 
     pendingDelete.reject(new Error('delete failed'))
     await flushPromises()
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除分组')
     expect(wrapper.get('[data-testid="group-toggle-group-a"]')).toBeTruthy()
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('删除分组失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '删除分组失败，请重试。'
+    )
   })
 
   it('rejects a stale dialog confirmation after the refreshed group scope is armed', async () => {
     const newSessionId = '00000000-0000-4000-8000-000000000001'
     const newRuleId = '00000000-0000-4000-8000-000000000002'
-    const randomId = vi.spyOn(crypto, 'randomUUID')
+    const randomId = vi
+      .spyOn(crypto, 'randomUUID')
       .mockReturnValueOnce(newSessionId)
       .mockReturnValueOnce(newRuleId)
     try {
@@ -1596,8 +2240,12 @@ describe('App', () => {
       await wrapper.get('[data-testid="delete-group-group-a"]').trigger('click')
 
       await wrapper.get('.create-session').trigger('click')
-      await wrapper.get('[data-testid="create-session-action"]').trigger('click')
-      await wrapper.get('[data-testid="tunnel-grid"] .primary-button').trigger('click')
+      await wrapper
+        .get('[data-testid="create-session-action"]')
+        .trigger('click')
+      await wrapper
+        .get('[data-testid="tunnel-grid"] .primary-button')
+        .trigger('click')
       await flushPromises()
       const savedConfigs = invoke.mock.calls
         .filter(([command]) => command === 'save_config')
@@ -1605,16 +2253,26 @@ describe('App', () => {
       const addedRuleId = savedConfigs.at(-1).rules[0].id
       expect(addedRuleId).toBe(newRuleId)
       const runtimeListener = listen.mock.calls.at(-1)![1]
-      runtimeListener({ payload: { rules: [{ ruleId: addedRuleId, state: 'active', message: null }] } })
+      runtimeListener({
+        payload: {
+          rules: [{ ruleId: addedRuleId, state: 'active', message: null }],
+        },
+      })
       await wrapper.vm.$nextTick()
       expect(wrapper.get('.statusbar').text()).toContain('1 运行中')
 
-      const deletesBeforeFirstConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_group').length
-      const disconnectsBeforeFirstConfirm = invoke.mock.calls.filter(([command]) => command === 'disconnect_session').length
+      const deletesBeforeFirstConfirm = invoke.mock.calls.filter(
+        ([command]) => command === 'delete_group'
+      ).length
+      const disconnectsBeforeFirstConfirm = invoke.mock.calls.filter(
+        ([command]) => command === 'disconnect_session'
+      ).length
 
       const staleDialog = openConfirmDialog(wrapper)
       const staleGeneration = staleDialog.props('generation') as number
-      const staleConfirm = staleDialog.vm.$.vnode.props?.onConfirm as (generation: unknown) => void
+      const staleConfirm = staleDialog.vm.$.vnode.props?.onConfirm as (
+        generation: unknown
+      ) => void
       expect(staleConfirm).toBeTypeOf('function')
       staleDialog.vm.$emit('confirm', staleGeneration)
       await flushPromises()
@@ -1622,25 +2280,43 @@ describe('App', () => {
       const refreshedDialog = openConfirmDialog(wrapper)
       const refreshedGeneration = refreshedDialog.props('generation') as number
       expect(refreshedGeneration).not.toBe(staleGeneration)
-      expect(refreshedDialog.text()).toContain('分组内容已变化，请确认新的删除范围。')
+      expect(refreshedDialog.text()).toContain(
+        '分组内容已变化，请确认新的删除范围。'
+      )
       expect(refreshedDialog.text()).toContain('2 个会话')
       expect(refreshedDialog.text()).toContain('1 条转发规则')
-      expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeFirstConfirm)
-      expect(invoke.mock.calls.filter(([command]) => command === 'disconnect_session')).toHaveLength(disconnectsBeforeFirstConfirm)
+      expect(
+        invoke.mock.calls.filter(([command]) => command === 'delete_group')
+      ).toHaveLength(deletesBeforeFirstConfirm)
+      expect(
+        invoke.mock.calls.filter(
+          ([command]) => command === 'disconnect_session'
+        )
+      ).toHaveLength(disconnectsBeforeFirstConfirm)
 
       await wrapper.vm.$nextTick()
       await flushPromises()
       staleConfirm(staleGeneration)
       await flushPromises()
 
-      expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeFirstConfirm)
-      expect(invoke.mock.calls.filter(([command]) => command === 'disconnect_session')).toHaveLength(disconnectsBeforeFirstConfirm)
+      expect(
+        invoke.mock.calls.filter(([command]) => command === 'delete_group')
+      ).toHaveLength(deletesBeforeFirstConfirm)
+      expect(
+        invoke.mock.calls.filter(
+          ([command]) => command === 'disconnect_session'
+        )
+      ).toHaveLength(disconnectsBeforeFirstConfirm)
 
       refreshedDialog.vm.$emit('confirm', refreshedGeneration)
       await flushPromises()
 
-      expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeFirstConfirm + 1)
-      expect(invoke).toHaveBeenCalledWith('disconnect_session', { sessionId: newSessionId })
+      expect(
+        invoke.mock.calls.filter(([command]) => command === 'delete_group')
+      ).toHaveLength(deletesBeforeFirstConfirm + 1)
+      expect(invoke).toHaveBeenCalledWith('disconnect_session', {
+        sessionId: newSessionId,
+      })
       expect(wrapper.get('[data-testid="empty-workspace"]')).toBeTruthy()
       expect(wrapper.get('.statusbar').text()).toContain('0 运行中')
     } finally {
@@ -1659,21 +2335,29 @@ describe('App', () => {
     await flushPromises()
     const dialog = openConfirmDialog(wrapper)
     const generation = dialog.props('generation') as number
-    const deletesBeforeConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_group').length
+    const deletesBeforeConfirm = invoke.mock.calls.filter(
+      ([command]) => command === 'delete_group'
+    ).length
 
     dialog.vm.$emit('confirm')
     dialog.vm.$emit('confirm', 'invalid-generation')
     dialog.vm.$emit('confirm', Number.NaN)
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeConfirm)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'delete_group')
+    ).toHaveLength(deletesBeforeConfirm)
     expect(wrapper.get('[data-testid="group-toggle-group-a"]')).toBeTruthy()
 
     dialog.vm.$emit('confirm', generation)
     await flushPromises()
 
-    expect(invoke.mock.calls.filter(([command]) => command === 'delete_group')).toHaveLength(deletesBeforeConfirm + 1)
-    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(false)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'delete_group')
+    ).toHaveLength(deletesBeforeConfirm + 1)
+    expect(wrapper.find('[data-testid="group-toggle-group-a"]').exists()).toBe(
+      false
+    )
   })
 
   it('keeps session deletion as a distinct confirmation and backend operation', async () => {
@@ -1682,7 +2366,9 @@ describe('App', () => {
       sessions: [session('session-a', 'group-a')],
       rules: [rule('rule-a', 'session-a')],
     })
-    const deleteSession = wrapper.findAll('button').find((button) => button.text() === '删除会话')
+    const deleteSession = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '删除会话')
 
     await deleteSession!.trigger('click')
     expect(wrapper.get('[role="dialog"]').text()).toContain('删除 SSH 会话')
@@ -1690,20 +2376,30 @@ describe('App', () => {
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
     await flushPromises()
 
-    expect(invoke).toHaveBeenCalledWith('delete_session', { sessionId: 'session-a' })
+    expect(invoke).toHaveBeenCalledWith('delete_session', {
+      sessionId: 'session-a',
+    })
     expect(wrapper.get('[data-testid="empty-workspace"]')).toBeTruthy()
   })
 
   it('keeps a failed session deletion pending when cancel and confirm are repeated in flight', async () => {
     const pendingDelete = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, [], { delete_session: () => pendingDelete.promise })
-    const deleteSession = wrapper.findAll('button').find((button) => button.text() === '删除会话')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      [],
+      { delete_session: () => pendingDelete.promise }
+    )
+    const deleteSession = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '删除会话')
     await deleteSession!.trigger('click')
-    const deletesBeforeConfirm = invoke.mock.calls.filter(([command]) => command === 'delete_session').length
+    const deletesBeforeConfirm = invoke.mock.calls.filter(
+      ([command]) => command === 'delete_session'
+    ).length
 
     await wrapper.get('[data-testid="confirm-dialog-action"]').trigger('click')
     await flushPromises()
@@ -1713,7 +2409,9 @@ describe('App', () => {
     await wrapper.vm.$nextTick()
 
     expect(dialog.props('busy')).toBe(true)
-    expect(invoke.mock.calls.filter(([command]) => command === 'delete_session')).toHaveLength(deletesBeforeConfirm + 1)
+    expect(
+      invoke.mock.calls.filter(([command]) => command === 'delete_session')
+    ).toHaveLength(deletesBeforeConfirm + 1)
 
     pendingDelete.reject(new Error('delete failed'))
     await flushPromises()
@@ -1728,7 +2426,9 @@ describe('App', () => {
       rules: [],
     })
 
-    const disconnect = wrapper.findAll('button').find((button) => button.text() === '断开连接')!
+    const disconnect = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '断开连接')!
     expect(disconnect.attributes('disabled')).toBeDefined()
     expect(wrapper.get('.connection').text()).toContain('未连接')
   })
@@ -1740,28 +2440,47 @@ describe('App', () => {
       rules: [],
     })
     const runtimeListener = listen.mock.calls.at(-1)![1]
-    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    runtimeListener({
+      payload: { rules: [], connectedSessionIds: ['session-a'] },
+    })
     await wrapper.vm.$nextTick()
 
-    const connect = wrapper.findAll('button').find((button) => button.text() === '连接并启动')!
+    const connect = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '连接并启动')!
     expect(connect.attributes('disabled')).toBeDefined()
     expect(wrapper.get('.connection').text()).toContain('已连接')
   })
 
   it('reports a specific error when disconnecting a connected session fails', async () => {
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, [], { disconnect_session: async () => { throw new Error('disconnect failed') } })
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      [],
+      {
+        disconnect_session: async () => {
+          throw new Error('disconnect failed')
+        },
+      }
+    )
     const runtimeListener = listen.mock.calls.at(-1)![1]
-    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    runtimeListener({
+      payload: { rules: [], connectedSessionIds: ['session-a'] },
+    })
     await wrapper.vm.$nextTick()
 
-    await wrapper.findAll('button').find((button) => button.text() === '断开连接')!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '断开连接')!
+      .trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('断开连接失败，请重试。')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '断开连接失败，请重试。'
+    )
   })
 
   it('shows a success toast after connecting and starting tunnels', async () => {
@@ -1770,9 +2489,14 @@ describe('App', () => {
       sessions: [session('session-a', 'group-a')],
       rules: [],
     })
-    await wrapper.findAll('button').find((button) => button.text() === '连接并启动')!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '连接并启动')!
+      .trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('连接并启动隧道成功')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '连接并启动隧道成功'
+    )
   })
 
   it('shows a success toast after disconnecting a connected session', async () => {
@@ -1782,11 +2506,18 @@ describe('App', () => {
       rules: [],
     })
     const runtimeListener = listen.mock.calls.at(-1)![1]
-    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    runtimeListener({
+      payload: { rules: [], connectedSessionIds: ['session-a'] },
+    })
     await wrapper.vm.$nextTick()
-    await wrapper.findAll('button').find((button) => button.text() === '断开连接')!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '断开连接')!
+      .trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('已断开连接')
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '已断开连接'
+    )
   })
 
   it('rebuilds the connection when reconnect tunnels is pressed', async () => {
@@ -1797,27 +2528,39 @@ describe('App', () => {
     })
     const callsBefore = invoke.mock.calls.length
 
-    await wrapper.findAll('button').find((button) => button.text().includes('重连隧道'))!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('重连隧道'))!
+      .trigger('click')
     await flushPromises()
 
-    expect(invoke.mock.calls.slice(callsBefore).map(([command]) => command)).toEqual([
-      'disconnect_session',
-      'connect_session',
-      'start_enabled_rules',
-    ])
+    expect(
+      invoke.mock.calls.slice(callsBefore).map(([command]) => command)
+    ).toEqual(['disconnect_session', 'connect_session', 'start_enabled_rules'])
   })
 
   it('shows an in-progress label on connect while it is pending', async () => {
     const pendingConnect = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, [], { connect_session: () => pendingConnect.promise })
-    await wrapper.findAll('button').find((button) => button.text() === '连接并启动')!.trigger('click')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      [],
+      { connect_session: () => pendingConnect.promise }
+    )
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '连接并启动')!
+      .trigger('click')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.findAll('button').some((button) => button.text().includes('连接并启动中'))).toBe(true)
+    expect(
+      wrapper
+        .findAll('button')
+        .some((button) => button.text().includes('连接并启动中'))
+    ).toBe(true)
 
     pendingConnect.resolve()
     await flushPromises()
@@ -1829,8 +2572,12 @@ describe('App', () => {
       sessions: [session('session-a', 'group-a')],
       rules: [],
     })
-    const disconnect = wrapper.findAll('button').find((button) => button.text() === '断开连接')!
-    expect(disconnect.element.parentElement?.getAttribute('title')).toBe('会话未连接')
+    const disconnect = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '断开连接')!
+    expect(disconnect.element.parentElement?.getAttribute('title')).toBe(
+      '会话未连接'
+    )
   })
 
   it('shows a connected hint on the disabled connect button', async () => {
@@ -1840,43 +2587,74 @@ describe('App', () => {
       rules: [],
     })
     const runtimeListener = listen.mock.calls.at(-1)![1]
-    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    runtimeListener({
+      payload: { rules: [], connectedSessionIds: ['session-a'] },
+    })
     await wrapper.vm.$nextTick()
 
-    const connect = wrapper.findAll('button').find((button) => button.text() === '连接并启动')!
-    expect(connect.element.parentElement?.getAttribute('title')).toBe('会话已连接')
+    const connect = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '连接并启动')!
+    expect(connect.element.parentElement?.getAttribute('title')).toBe(
+      '会话已连接'
+    )
   })
 
   it('shows an in-progress hint on the disabled reconnect button', async () => {
     const pendingConnect = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, [], { connect_session: () => pendingConnect.promise })
-    await wrapper.findAll('button').find((button) => button.text() === '连接并启动')!.trigger('click')
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      [],
+      { connect_session: () => pendingConnect.promise }
+    )
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '连接并启动')!
+      .trigger('click')
     await wrapper.vm.$nextTick()
 
-    const reconnect = wrapper.findAll('button').find((button) => button.text().includes('重连隧道'))!
-    expect(reconnect.element.parentElement?.getAttribute('title')).toBe('操作进行中，请稍候')
+    const reconnect = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('重连隧道'))!
+    expect(reconnect.element.parentElement?.getAttribute('title')).toBe(
+      '操作进行中，请稍候'
+    )
     pendingConnect.resolve()
     await flushPromises()
   })
 
   it('disables bulk actions while start-all is in flight', async () => {
     const pendingStart = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, [], { start_enabled_rules: () => pendingStart.promise })
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      [],
+      { start_enabled_rules: () => pendingStart.promise }
+    )
     const runtimeListener = listen.mock.calls.at(-1)![1]
-    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    runtimeListener({
+      payload: { rules: [], connectedSessionIds: ['session-a'] },
+    })
     await wrapper.vm.$nextTick()
 
-    await wrapper.findAll('button').find((button) => button.text().includes('启动所有'))!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('启动所有'))!
+      .trigger('click')
     await wrapper.vm.$nextTick()
-    expect(wrapper.findAll('button').find((button) => button.text().includes('启动所有'))!.attributes('disabled')).toBeDefined()
+    expect(
+      wrapper
+        .findAll('button')
+        .find((button) => button.text().includes('启动所有'))!
+        .attributes('disabled')
+    ).toBeDefined()
 
     pendingStart.resolve()
     await flushPromises()
@@ -1884,15 +2662,26 @@ describe('App', () => {
 
   it('shows an in-progress label on reconnect while pending', async () => {
     const pendingDisconnect = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, [], { disconnect_session: () => pendingDisconnect.promise })
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      [],
+      { disconnect_session: () => pendingDisconnect.promise }
+    )
 
-    await wrapper.findAll('button').find((button) => button.text().includes('重连隧道'))!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('重连隧道'))!
+      .trigger('click')
     await wrapper.vm.$nextTick()
-    expect(wrapper.findAll('button').some((button) => button.text().includes('重连隧道中'))).toBe(true)
+    expect(
+      wrapper
+        .findAll('button')
+        .some((button) => button.text().includes('重连隧道中'))
+    ).toBe(true)
 
     pendingDisconnect.resolve()
     await flushPromises()
@@ -1900,20 +2689,33 @@ describe('App', () => {
 
   it('prioritizes the in-progress hint when connected and a session operation is pending', async () => {
     const pendingDisconnect = deferred()
-    const wrapper = await mountAppWithConfig({
-      groups: [{ id: 'group-a', name: '分组 A' }],
-      sessions: [session('session-a', 'group-a')],
-      rules: [],
-    }, [], { disconnect_session: () => pendingDisconnect.promise })
+    const wrapper = await mountAppWithConfig(
+      {
+        groups: [{ id: 'group-a', name: '分组 A' }],
+        sessions: [session('session-a', 'group-a')],
+        rules: [],
+      },
+      [],
+      { disconnect_session: () => pendingDisconnect.promise }
+    )
     const runtimeListener = listen.mock.calls.at(-1)![1]
-    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    runtimeListener({
+      payload: { rules: [], connectedSessionIds: ['session-a'] },
+    })
     await wrapper.vm.$nextTick()
 
-    await wrapper.findAll('button').find((button) => button.text() === '断开连接')!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '断开连接')!
+      .trigger('click')
     await wrapper.vm.$nextTick()
 
-    const connect = wrapper.findAll('button').find((button) => button.text() === '连接并启动')!
-    expect(connect.element.parentElement?.getAttribute('title')).toBe('操作进行中，请稍候')
+    const connect = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '连接并启动')!
+    expect(connect.element.parentElement?.getAttribute('title')).toBe(
+      '操作进行中，请稍候'
+    )
     pendingDisconnect.resolve()
     await flushPromises()
   })
@@ -1924,9 +2726,13 @@ describe('App', () => {
       sessions: [session('session-a', 'group-a')],
       rules: [],
     })
-    const disconnect = wrapper.findAll('button').find((button) => button.text() === '断开连接')!
+    const disconnect = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '断开连接')!
     expect(disconnect.attributes('aria-description')).toBe('会话未连接')
-    const connect = wrapper.findAll('button').find((button) => button.text() === '连接并启动')!
+    const connect = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '连接并启动')!
     expect(connect.element.parentElement?.hasAttribute('title')).toBe(false)
   })
 })

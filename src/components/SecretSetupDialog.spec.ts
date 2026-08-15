@@ -6,7 +6,10 @@ import { withChineseI18n } from '../test/i18n'
 
 describe('SecretSetupDialog', () => {
   it('does not emit setup until matching nonblank passwords are supplied', async () => {
-    const wrapper = mount(SecretSetupDialog, { ...withChineseI18n(), props: { open: true } })
+    const wrapper = mount(SecretSetupDialog, {
+      ...withChineseI18n(),
+      props: { open: true },
+    })
     const action = wrapper.get('[data-testid="setup-secrets-action"]')
 
     await wrapper.get('[aria-label="主密码"]').setValue('one')
@@ -25,7 +28,10 @@ describe('SecretSetupDialog', () => {
   })
 
   it('clears password fields after setup, close, and every open transition', async () => {
-    const wrapper = mount(SecretSetupDialog, { ...withChineseI18n(), props: { open: true } })
+    const wrapper = mount(SecretSetupDialog, {
+      ...withChineseI18n(),
+      props: { open: true },
+    })
     const password = wrapper.get('[aria-label="主密码"]')
     const confirmation = wrapper.get('[aria-label="确认主密码"]')
     await password.setValue('first password')
@@ -42,12 +48,21 @@ describe('SecretSetupDialog', () => {
     await password.setValue('stale password')
     await wrapper.setProps({ open: false })
     await wrapper.setProps({ open: true })
-    expect((wrapper.get('[aria-label="主密码"]').element as HTMLInputElement).value).toBe('')
+    expect(
+      (wrapper.get('[aria-label="主密码"]').element as HTMLInputElement).value
+    ).toBe('')
   })
 
   it('marks both setup fields as new password inputs', () => {
-    const wrapper = mount(SecretSetupDialog, { ...withChineseI18n(), props: { open: true } })
-    expect(wrapper.get('[aria-label="主密码"]').attributes('autocomplete')).toBe('new-password')
-    expect(wrapper.get('[aria-label="确认主密码"]').attributes('autocomplete')).toBe('new-password')
+    const wrapper = mount(SecretSetupDialog, {
+      ...withChineseI18n(),
+      props: { open: true },
+    })
+    expect(
+      wrapper.get('[aria-label="主密码"]').attributes('autocomplete')
+    ).toBe('new-password')
+    expect(
+      wrapper.get('[aria-label="确认主密码"]').attributes('autocomplete')
+    ).toBe('new-password')
   })
 })

@@ -12,7 +12,9 @@ import RecoveryCodesDialog from './components/RecoveryCodesDialog.vue'
 import SecretSetupDialog from './components/SecretSetupDialog.vue'
 import SecretUnlockDialog from './components/SecretUnlockDialog.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
-import SessionSidebar, { type SessionGroup } from './components/SessionSidebar.vue'
+import SessionSidebar, {
+  type SessionGroup,
+} from './components/SessionSidebar.vue'
 import TunnelGrid from './components/TunnelGrid.vue'
 import ToastStack from './components/ToastStack.vue'
 import ConfigMenu from './components/ConfigMenu.vue'
@@ -29,10 +31,15 @@ const i18n = props.i18n ?? createI18n(store.preferences.language)
 provideI18n(i18n)
 const { t } = i18n
 const toast = createToastController()
-type ErrorKey = Extract<TranslationKey, `error.${string}`> | 'settings.loadFailed'
+type ErrorKey =
+  Extract<TranslationKey, `error.${string}`> | 'settings.loadFailed'
 type SuccessKey = Extract<TranslationKey, `success.${string}`>
-function notifyError(key: ErrorKey) { toast.push(t(key), 'error') }
-function notifySuccess(key: SuccessKey) { toast.push(t(key), 'success') }
+function notifyError(key: ErrorKey) {
+  toast.push(t(key), 'error')
+}
+function notifySuccess(key: SuccessKey) {
+  toast.push(t(key), 'success')
+}
 const selectedSessionId = ref<string | null>(null)
 const importMode = ref<'import' | 'export' | null>(null)
 const unlockOpen = ref(false)
@@ -56,7 +63,12 @@ let preferenceSaveTail: Promise<void> = Promise.resolve()
 let cleanupDocumentPreferences: (() => void) | undefined
 let appMounted = false
 const exportedJson = ref('')
-const hostTrust = ref<{ host: string; port: number; algorithm: string; fingerprint: string } | null>(null)
+const hostTrust = ref<{
+  host: string
+  port: number
+  algorithm: string
+  fingerprint: string
+} | null>(null)
 const deleteSessionOpen = ref(false)
 const sessionDeletionBusy = ref(false)
 const pendingRuleId = ref<string | null>(null)
@@ -87,40 +99,96 @@ let privateKeyPickerGeneration = 0
 let queuedConfigurationSaves = 0
 let configurationSaveTail: Promise<void> = Promise.resolve()
 
-const groups = computed<SessionGroup[]>(() => store.groups.map((group) => ({
-  ...group,
-  icon: '▣',
-  sessions: store.sessions.filter((session) => session.groupId === group.id).map((session) => ({
-    id: session.id,
-    name: session.name,
-    state: store.rules.some((rule) => rule.sessionId === session.id && rule.runtimeState === 'failed') ? 'failed' : store.rules.some((rule) => rule.sessionId === session.id && rule.runtimeState === 'active') ? 'active' : 'stopped',
-  })),
-})))
-const selectedSession = computed(() => store.sessions.find((session) => session.id === selectedSessionId.value))
-const currentRules = computed(() => store.rules.filter((rule) => rule.sessionId === selectedSessionId.value))
-const activeCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'active').length)
-const errorCount = computed(() => store.rules.filter((rule) => rule.runtimeState === 'conflict' || rule.runtimeState === 'failed').length)
-const isConnected = computed(() => !!selectedSessionId.value
-  && store.connectedSessionIds.includes(selectedSessionId.value))
-const bulkOperationsBusy = computed(() => bulkRulesBusy.value || sessionBusy.value !== null)
-const connectHint = computed(() => sessionBusy.value
-  ? t('hint.operationInProgress')
-  : isConnected.value ? t('hint.sessionConnected') : '')
-const disconnectHint = computed(() => sessionBusy.value
-  ? t('hint.operationInProgress')
-  : !isConnected.value ? t('hint.sessionNotConnected') : '')
-const reconnectHint = computed(() => sessionBusy.value ? t('hint.operationInProgress') : '')
-const authenticationBusy = computed(() => authenticationSaving.value || authenticationPicking.value)
-const authenticationControlsBusy = computed(() => authenticationBusy.value || configurationSaving.value)
-const setupOpen = computed(() => preferencesReady.value
-  && store.initializationState === 'ready'
-  && store.secretStoreConfigured === false)
-const workspaceReady = computed(() => store.initializationState === 'ready'
-  && preferencesReady.value
-  && store.secretStoreConfigured === true
-  && recoveryCodes.value.length === 0)
-const preferenceErrorMessage = computed(() => preferenceErrorKey.value ? t(preferenceErrorKey.value) : '')
-const masterPasswordErrorMessage = computed(() => masterPasswordErrorKey.value ? t(masterPasswordErrorKey.value) : '')
+const groups = computed<SessionGroup[]>(() =>
+  store.groups.map((group) => ({
+    ...group,
+    icon: '▣',
+    sessions: store.sessions
+      .filter((session) => session.groupId === group.id)
+      .map((session) => ({
+        id: session.id,
+        name: session.name,
+        state: store.rules.some(
+          (rule) =>
+            rule.sessionId === session.id && rule.runtimeState === 'failed'
+        )
+          ? 'failed'
+          : store.rules.some(
+                (rule) =>
+                  rule.sessionId === session.id &&
+                  rule.runtimeState === 'active'
+              )
+            ? 'active'
+            : 'stopped',
+      })),
+  }))
+)
+const selectedSession = computed(() =>
+  store.sessions.find((session) => session.id === selectedSessionId.value)
+)
+const currentRules = computed(() =>
+  store.rules.filter((rule) => rule.sessionId === selectedSessionId.value)
+)
+const activeCount = computed(
+  () => store.rules.filter((rule) => rule.runtimeState === 'active').length
+)
+const errorCount = computed(
+  () =>
+    store.rules.filter(
+      (rule) =>
+        rule.runtimeState === 'conflict' || rule.runtimeState === 'failed'
+    ).length
+)
+const isConnected = computed(
+  () =>
+    !!selectedSessionId.value &&
+    store.connectedSessionIds.includes(selectedSessionId.value)
+)
+const bulkOperationsBusy = computed(
+  () => bulkRulesBusy.value || sessionBusy.value !== null
+)
+const connectHint = computed(() =>
+  sessionBusy.value
+    ? t('hint.operationInProgress')
+    : isConnected.value
+      ? t('hint.sessionConnected')
+      : ''
+)
+const disconnectHint = computed(() =>
+  sessionBusy.value
+    ? t('hint.operationInProgress')
+    : !isConnected.value
+      ? t('hint.sessionNotConnected')
+      : ''
+)
+const reconnectHint = computed(() =>
+  sessionBusy.value ? t('hint.operationInProgress') : ''
+)
+const authenticationBusy = computed(
+  () => authenticationSaving.value || authenticationPicking.value
+)
+const authenticationControlsBusy = computed(
+  () => authenticationBusy.value || configurationSaving.value
+)
+const setupOpen = computed(
+  () =>
+    preferencesReady.value &&
+    store.initializationState === 'ready' &&
+    store.secretStoreConfigured === false
+)
+const workspaceReady = computed(
+  () =>
+    store.initializationState === 'ready' &&
+    preferencesReady.value &&
+    store.secretStoreConfigured === true &&
+    recoveryCodes.value.length === 0
+)
+const preferenceErrorMessage = computed(() =>
+  preferenceErrorKey.value ? t(preferenceErrorKey.value) : ''
+)
+const masterPasswordErrorMessage = computed(() =>
+  masterPasswordErrorKey.value ? t(masterPasswordErrorKey.value) : ''
+)
 const deleteGroupMessage = computed(() => {
   const pending = pendingGroupDeletion.value
   if (!pending) return ''
@@ -134,17 +202,20 @@ const backendTone = computed(() => {
 })
 const backendLabel = computed(() => {
   if (store.initializationState === 'failed') return t('status.backendFailed')
-  if (store.initializationState === 'connecting') return t('status.backendConnecting')
+  if (store.initializationState === 'connecting')
+    return t('status.backendConnecting')
   return t('status.backendReady')
 })
 
 function validPreferences(value: unknown): value is AppPreferences {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const candidate = value as Record<string, unknown>
-  return Object.keys(candidate).length === 3
-    && ['system', 'zh-CN', 'en'].includes(candidate.language as string)
-    && ['small', 'medium', 'large'].includes(candidate.fontSize as string)
-    && ['system', 'light', 'dark'].includes(candidate.theme as string)
+  return (
+    Object.keys(candidate).length === 3 &&
+    ['system', 'zh-CN', 'en'].includes(candidate.language as string) &&
+    ['small', 'medium', 'large'].includes(candidate.fontSize as string) &&
+    ['system', 'light', 'dark'].includes(candidate.theme as string)
+  )
 }
 
 function applyPreferences(next: AppPreferences) {
@@ -195,12 +266,18 @@ function closeSettings() {
   masterPasswordErrorKey.value = null
 }
 
-async function changeMasterPassword(currentPassword: string, newPassword: string) {
-  if (masterPasswordChanging.value
-    || !settingsOpen.value
-    || store.secretStoreConfigured !== true
-    || !currentPassword.trim()
-    || !newPassword.trim()) return
+async function changeMasterPassword(
+  currentPassword: string,
+  newPassword: string
+) {
+  if (
+    masterPasswordChanging.value ||
+    !settingsOpen.value ||
+    store.secretStoreConfigured !== true ||
+    !currentPassword.trim() ||
+    !newPassword.trim()
+  )
+    return
   masterPasswordChanging.value = true
   masterPasswordErrorKey.value = null
   try {
@@ -218,7 +295,12 @@ async function saveConfig() {
   configurationSaving.value = true
   let succeeded = false
   const operation = configurationSaveTail.then(async () => {
-    try { await store.save(); succeeded = true } catch { notifyError('error.saveConfig') }
+    try {
+      await store.save()
+      succeeded = true
+    } catch {
+      notifyError('error.saveConfig')
+    }
   })
   configurationSaveTail = operation
   await operation
@@ -238,11 +320,17 @@ async function changeAuthenticationKind(event: Event) {
   if (authenticationControlsBusy.value) return
   const session = selectedSession.value
   const kind = (event.target as HTMLSelectElement).value
-  if (!session || (kind !== 'password' && kind !== 'private_key') || kind === session.auth.kind) return
+  if (
+    !session ||
+    (kind !== 'password' && kind !== 'private_key') ||
+    kind === session.auth.kind
+  )
+    return
   clearAuthenticationDrafts()
-  session.auth = kind === 'password'
-    ? { kind: 'password', secretId: null }
-    : { kind: 'private_key', path: '', passphraseSecretId: null }
+  session.auth =
+    kind === 'password'
+      ? { kind: 'password', secretId: null }
+      : { kind: 'private_key', path: '', passphraseSecretId: null }
   await persist()
 }
 async function choosePrivateKey() {
@@ -254,14 +342,25 @@ async function choosePrivateKey() {
   authenticationPicking.value = true
   try {
     const path = await open({ multiple: false, directory: false })
-    if (generation !== privateKeyPickerGeneration || typeof path !== 'string' || selectedSessionId.value !== sessionId) return
+    if (
+      generation !== privateKeyPickerGeneration ||
+      typeof path !== 'string' ||
+      selectedSessionId.value !== sessionId
+    )
+      return
     const session = store.sessions.find((item) => item.id === sessionId)
     if (session?.auth !== auth || session.auth.kind !== 'private_key') return
     const previousPath = auth.path
     session.auth.path = path
     if (!(await saveConfig())) {
-      const originatingSession = store.sessions.find((item) => item.id === sessionId)
-      if (originatingSession?.auth === auth && originatingSession.auth.kind === 'private_key') originatingSession.auth.path = previousPath
+      const originatingSession = store.sessions.find(
+        (item) => item.id === sessionId
+      )
+      if (
+        originatingSession?.auth === auth &&
+        originatingSession.auth.kind === 'private_key'
+      )
+        originatingSession.auth.path = previousPath
     }
   } catch {
     notifyError('error.choosePrivateKey')
@@ -275,7 +374,8 @@ async function saveAuthentication() {
   if (!session) return
   const sessionId = session.id
   const authKind = session.auth.kind
-  const draft = session.auth.kind === 'password' ? passwordDraft : passphraseDraft
+  const draft =
+    session.auth.kind === 'password' ? passwordDraft : passphraseDraft
   const secret = draft.value
   authenticationSaving.value = true
   try {
@@ -283,14 +383,26 @@ async function saveAuthentication() {
       notifyError('error.saveAuthenticationConfig')
       return
     }
-    const persistedSession = store.sessions.find((item) => item.id === sessionId)
+    const persistedSession = store.sessions.find(
+      (item) => item.id === sessionId
+    )
     if (persistedSession?.auth.kind !== authKind) return
     if (!secret.trim()) {
-      if (selectedSessionId.value === sessionId && selectedSession.value?.auth.kind === authKind && draft.value === secret) draft.value = ''
+      if (
+        selectedSessionId.value === sessionId &&
+        selectedSession.value?.auth.kind === authKind &&
+        draft.value === secret
+      )
+        draft.value = ''
       return
     }
     await store.saveSessionSecret(sessionId, secret)
-    if (selectedSessionId.value === sessionId && selectedSession.value?.auth.kind === authKind && draft.value === secret) draft.value = ''
+    if (
+      selectedSessionId.value === sessionId &&
+      selectedSession.value?.auth.kind === authKind &&
+      draft.value === secret
+    )
+      draft.value = ''
     notifySuccess('success.authenticationSaved')
   } catch {
     notifyError('error.saveAuthenticationCredentials')
@@ -298,21 +410,66 @@ async function saveAuthentication() {
     authenticationSaving.value = false
   }
 }
-async function updateRule(nextRule: LocalForwardRule) { const index = store.rules.findIndex((rule) => rule.id === nextRule.id); if (index >= 0) store.rules.splice(index, 1, nextRule); await persist() }
-async function toggleRule(nextRule: LocalForwardRule) { await updateRule(nextRule); try { if (nextRule.enabled) await store.startRule(nextRule.id); else await store.stopRule(nextRule.id) } catch { notifyError('error.ruleOperation') } }
-async function addRule() { if (!selectedSessionId.value) return; store.rules.push({ id: crypto.randomUUID(), sessionId: selectedSessionId.value, enabled: false, localPort: 1, targetHost: 'localhost', targetPort: 1, note: '', runtimeState: 'stopped' }); await persist() }
-async function cloneRule(id: string) { const source = store.rules.find((rule) => rule.id === id); if (source) { store.rules.push({ ...source, id: crypto.randomUUID(), localPort: 1, runtimeState: 'stopped', enabled: false }); await persist() } }
-function requestRemoveRule(id: string) { pendingRuleId.value = id }
-function closeRuleDeletion() { if (!ruleDeletionBusy.value) pendingRuleId.value = null }
+async function updateRule(nextRule: LocalForwardRule) {
+  const index = store.rules.findIndex((rule) => rule.id === nextRule.id)
+  if (index >= 0) store.rules.splice(index, 1, nextRule)
+  await persist()
+}
+async function toggleRule(nextRule: LocalForwardRule) {
+  await updateRule(nextRule)
+  try {
+    if (nextRule.enabled) await store.startRule(nextRule.id)
+    else await store.stopRule(nextRule.id)
+  } catch {
+    notifyError('error.ruleOperation')
+  }
+}
+async function addRule() {
+  if (!selectedSessionId.value) return
+  store.rules.push({
+    id: crypto.randomUUID(),
+    sessionId: selectedSessionId.value,
+    enabled: false,
+    localPort: 1,
+    targetHost: 'localhost',
+    targetPort: 1,
+    note: '',
+    runtimeState: 'stopped',
+  })
+  await persist()
+}
+async function cloneRule(id: string) {
+  const source = store.rules.find((rule) => rule.id === id)
+  if (source) {
+    store.rules.push({
+      ...source,
+      id: crypto.randomUUID(),
+      localPort: 1,
+      runtimeState: 'stopped',
+      enabled: false,
+    })
+    await persist()
+  }
+}
+function requestRemoveRule(id: string) {
+  pendingRuleId.value = id
+}
+function closeRuleDeletion() {
+  if (!ruleDeletionBusy.value) pendingRuleId.value = null
+}
 async function removeRule() {
   if (ruleDeletionBusy.value) return
   const id = pendingRuleId.value
   if (!id) return
   const rule = store.rules.find((item) => item.id === id)
-  if (!rule) { pendingRuleId.value = null; return }
+  if (!rule) {
+    pendingRuleId.value = null
+    return
+  }
   ruleDeletionBusy.value = true
   try {
-    if (rule.runtimeState !== 'stopped') await store.stopRule(id).catch(() => undefined)
+    if (rule.runtimeState !== 'stopped')
+      await store.stopRule(id).catch(() => undefined)
     await store.deleteRule(id)
     const index = store.rules.findIndex((item) => item.id === id)
     if (index >= 0) store.rules.splice(index, 1)
@@ -321,7 +478,10 @@ async function removeRule() {
   } catch {
     await store.reloadConfig().catch(() => undefined)
     if (!store.rules.some((item) => item.id === id)) pendingRuleId.value = null
-    if (!store.sessions.some((session) => session.id === selectedSessionId.value)) selectedSessionId.value = store.sessions[0]?.id ?? null
+    if (
+      !store.sessions.some((session) => session.id === selectedSessionId.value)
+    )
+      selectedSessionId.value = store.sessions[0]?.id ?? null
     notifyError('error.deleteRule')
   } finally {
     ruleDeletionBusy.value = false
@@ -331,7 +491,9 @@ function applyConnectFailure(error: unknown) {
   const value = String(error)
   hostTrust.value = hostTrustRequest(value)
   if (hostTrust.value) return
-  notifyError(value.includes('HostKeyChanged') ? 'error.hostKeyChanged' : 'error.connect')
+  notifyError(
+    value.includes('HostKeyChanged') ? 'error.hostKeyChanged' : 'error.connect'
+  )
 }
 async function connect() {
   if (!selectedSessionId.value || sessionBusy.value) return
@@ -397,12 +559,42 @@ async function stopAll() {
   }
 }
 function hostTrustRequest(value: string) {
-  const match = /HostTrustRequired \{ host: "([^"]+)", port: (\d+), algorithm: "([^"]+)", fingerprint: "([^"]+)" \}/.exec(value)
-  return match ? { host: match[1], port: Number(match[2]), algorithm: match[3], fingerprint: match[4] } : null
+  const match =
+    /HostTrustRequired \{ host: "([^"]+)", port: (\d+), algorithm: "([^"]+)", fingerprint: "([^"]+)" \}/.exec(
+      value
+    )
+  return match
+    ? {
+        host: match[1],
+        port: Number(match[2]),
+        algorithm: match[3],
+        fingerprint: match[4],
+      }
+    : null
 }
-async function approveHostTrust() { if (!hostTrust.value) return; const request = hostTrust.value; try { await store.approveHostKey(request.host, request.port, request.algorithm, request.fingerprint); hostTrust.value = null; await connect() } catch { notifyError('error.saveHostTrust') } }
+async function approveHostTrust() {
+  if (!hostTrust.value) return
+  const request = hostTrust.value
+  try {
+    await store.approveHostKey(
+      request.host,
+      request.port,
+      request.algorithm,
+      request.fingerprint
+    )
+    hostTrust.value = null
+    await connect()
+  } catch {
+    notifyError('error.saveHostTrust')
+  }
+}
 async function initializeSecrets(password: string) {
-  if (secretOperationBusy.value || !setupOpen.value || recoveryCodes.value.length > 0) return
+  if (
+    secretOperationBusy.value ||
+    !setupOpen.value ||
+    recoveryCodes.value.length > 0
+  )
+    return
   secretOperationBusy.value = true
   credentialOperationMayProduceCodes.value = true
   try {
@@ -416,7 +608,13 @@ async function initializeSecrets(password: string) {
   }
 }
 async function unlock(password: string) {
-  if (secretOperationBusy.value || !unlockOpen.value || unlockMode.value !== 'unlock' || recoveryCodes.value.length > 0) return
+  if (
+    secretOperationBusy.value ||
+    !unlockOpen.value ||
+    unlockMode.value !== 'unlock' ||
+    recoveryCodes.value.length > 0
+  )
+    return
   secretOperationBusy.value = true
   credentialOperationMayProduceCodes.value = true
   try {
@@ -433,7 +631,13 @@ async function unlock(password: string) {
   }
 }
 async function recover(code: string, password: string) {
-  if (secretOperationBusy.value || !unlockOpen.value || unlockMode.value !== 'recovery' || recoveryCodes.value.length > 0) return
+  if (
+    secretOperationBusy.value ||
+    !unlockOpen.value ||
+    unlockMode.value !== 'recovery' ||
+    recoveryCodes.value.length > 0
+  )
+    return
   secretOperationBusy.value = true
   credentialOperationMayProduceCodes.value = true
   try {
@@ -455,7 +659,12 @@ function openUnlock() {
   unlockOpen.value = true
 }
 function changeUnlockMode(mode: 'unlock' | 'recovery') {
-  if (!secretOperationBusy.value && unlockOpen.value && recoveryCodes.value.length === 0) unlockMode.value = mode
+  if (
+    !secretOperationBusy.value &&
+    unlockOpen.value &&
+    recoveryCodes.value.length === 0
+  )
+    unlockMode.value = mode
 }
 function closeUnlock() {
   if (secretOperationBusy.value) return
@@ -469,23 +678,76 @@ function acknowledgeRecoveryCodes(acknowledged: unknown) {
   recoveryCodesAcknowledged.value = false
 }
 function warnBeforeClosingWithCodes(event: BeforeUnloadEvent) {
-  if (!credentialOperationMayProduceCodes.value && recoveryCodes.value.length === 0) return
+  if (
+    !credentialOperationMayProduceCodes.value &&
+    recoveryCodes.value.length === 0
+  )
+    return
   event.preventDefault()
   event.returnValue = ''
 }
-async function openTransfer(mode: 'import' | 'export') { try { exportedJson.value = mode === 'export' ? await store.exportConfig() : ''; importMode.value = mode } catch { notifyError('error.readConfig') } }
+async function openTransfer(mode: 'import' | 'export') {
+  try {
+    exportedJson.value = mode === 'export' ? await store.exportConfig() : ''
+    importMode.value = mode
+  } catch {
+    notifyError('error.readConfig')
+  }
+}
 async function transfer(json: string, replaceAll: boolean) {
   const mode = importMode.value
   try {
     if (mode === 'export') await navigator.clipboard.writeText(json)
-    else { await store.importConfig(json, replaceAll); selectedSessionId.value = store.sessions[0]?.id ?? null }
+    else {
+      await store.importConfig(json, replaceAll)
+      selectedSessionId.value = store.sessions[0]?.id ?? null
+    }
     importMode.value = null
     notifySuccess(mode === 'export' ? 'success.exported' : 'success.imported')
-  } catch { notifyError('error.processConfig') }
+  } catch {
+    notifyError('error.processConfig')
+  }
 }
-function requestCreateSession() { if (store.groups.length) createSessionOpen.value = true; else void addSession() }
-async function addSession(groupId?: string) { const group = store.groups.find((item) => item.id === groupId) ?? store.groups[0] ?? { id: crypto.randomUUID(), name: t('message.defaultGroup') }; if (!store.groups.length) store.groups.push(group); const id = crypto.randomUUID(); store.sessions.push({ id, groupId: group.id, name: t('message.unnamedSession'), host: 'localhost', port: 22, user: 'root', auth: { kind: 'password', secretId: null } }); selectedSessionId.value = id; createSessionOpen.value = false; if (await persist()) notifySuccess('success.sessionCreated') }
-async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false; notifySuccess('success.groupCreated') } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); notifyError('error.createGroup') } }
+function requestCreateSession() {
+  if (store.groups.length) createSessionOpen.value = true
+  else void addSession()
+}
+async function addSession(groupId?: string) {
+  const group = store.groups.find((item) => item.id === groupId) ??
+    store.groups[0] ?? {
+      id: crypto.randomUUID(),
+      name: t('message.defaultGroup'),
+    }
+  if (!store.groups.length) store.groups.push(group)
+  const id = crypto.randomUUID()
+  store.sessions.push({
+    id,
+    groupId: group.id,
+    name: t('message.unnamedSession'),
+    host: 'localhost',
+    port: 22,
+    user: 'root',
+    auth: { kind: 'password', secretId: null },
+  })
+  selectedSessionId.value = id
+  createSessionOpen.value = false
+  if (await persist()) notifySuccess('success.sessionCreated')
+}
+async function createGroup(name: string) {
+  const group = { id: crypto.randomUUID(), name }
+  store.groups.push(group)
+  try {
+    await store.createGroup(group)
+    createGroupOpen.value = false
+    notifySuccess('success.groupCreated')
+  } catch {
+    store.groups.splice(
+      store.groups.findIndex((item) => item.id === group.id),
+      1
+    )
+    notifyError('error.createGroup')
+  }
+}
 function groupDeletionSignature(id: string): GroupDeletionScope {
   const sessionIds = store.sessions
     .filter((session) => session.groupId === id)
@@ -502,17 +764,25 @@ function groupDeletionSignature(id: string): GroupDeletionScope {
     scopeChanged: false,
   }
 }
-function sameGroupDeletionScope(left: GroupDeletionScope, right: GroupDeletionScope) {
-  return left.id === right.id
-    && left.sessionIds.length === right.sessionIds.length
-    && left.ruleIds.length === right.ruleIds.length
-    && left.sessionIds.every((id, index) => id === right.sessionIds[index])
-    && left.ruleIds.every((id, index) => id === right.ruleIds[index])
+function sameGroupDeletionScope(
+  left: GroupDeletionScope,
+  right: GroupDeletionScope
+) {
+  return (
+    left.id === right.id &&
+    left.sessionIds.length === right.sessionIds.length &&
+    left.ruleIds.length === right.ruleIds.length &&
+    left.sessionIds.every((id, index) => id === right.sessionIds[index]) &&
+    left.ruleIds.every((id, index) => id === right.ruleIds[index])
+  )
 }
 function requestRemoveGroup(id: string) {
   groupConfirmationArmedGeneration.value = null
   groupConfirmationGeneration += 1
-  pendingGroupDeletion.value = { ...groupDeletionSignature(id), generation: groupConfirmationGeneration }
+  pendingGroupDeletion.value = {
+    ...groupDeletionSignature(id),
+    generation: groupConfirmationGeneration,
+  }
 }
 function armGroupDeletionConfirmation(generation: number) {
   if (generation === pendingGroupDeletion.value?.generation) {
@@ -528,37 +798,68 @@ function closeGroupDeletion() {
 async function removeGroup(generation: number) {
   if (groupDeletionBusy.value) return
   const pending = pendingGroupDeletion.value
-  if (!pending || generation !== pending.generation || groupConfirmationArmedGeneration.value !== generation) return
+  if (
+    !pending ||
+    generation !== pending.generation ||
+    groupConfirmationArmedGeneration.value !== generation
+  )
+    return
   const current = groupDeletionSignature(pending.id)
   if (!sameGroupDeletionScope(pending, current)) {
     groupConfirmationArmedGeneration.value = null
     groupConfirmationGeneration += 1
-    pendingGroupDeletion.value = { ...current, scopeChanged: true, generation: groupConfirmationGeneration }
+    pendingGroupDeletion.value = {
+      ...current,
+      scopeChanged: true,
+      generation: groupConfirmationGeneration,
+    }
     return
   }
   groupDeletionBusy.value = true
   const affectedSessionIds = new Set(pending.sessionIds)
   try {
-    await Promise.all(pending.sessionIds.map((id) => store.disconnectSession(id).catch(() => undefined)))
+    await Promise.all(
+      pending.sessionIds.map((id) =>
+        store.disconnectSession(id).catch(() => undefined)
+      )
+    )
     await store.deleteGroup(pending.id)
-    store.rules.splice(0, store.rules.length, ...store.rules.filter((rule) => !affectedSessionIds.has(rule.sessionId)))
-    store.sessions.splice(0, store.sessions.length, ...store.sessions.filter((session) => session.groupId !== pending.id))
-    const groupIndex = store.groups.findIndex((group) => group.id === pending.id)
+    store.rules.splice(
+      0,
+      store.rules.length,
+      ...store.rules.filter((rule) => !affectedSessionIds.has(rule.sessionId))
+    )
+    store.sessions.splice(
+      0,
+      store.sessions.length,
+      ...store.sessions.filter((session) => session.groupId !== pending.id)
+    )
+    const groupIndex = store.groups.findIndex(
+      (group) => group.id === pending.id
+    )
     if (groupIndex >= 0) store.groups.splice(groupIndex, 1)
     selectedSessionId.value = store.sessions[0]?.id ?? null
     pendingGroupDeletion.value = null
     notifySuccess('success.groupDeleted')
   } catch {
     await store.reloadConfig().catch(() => undefined)
-    if (!store.groups.some((group) => group.id === pending.id)) pendingGroupDeletion.value = null
-    if (!store.sessions.some((session) => session.id === selectedSessionId.value)) selectedSessionId.value = store.sessions[0]?.id ?? null
+    if (!store.groups.some((group) => group.id === pending.id))
+      pendingGroupDeletion.value = null
+    if (
+      !store.sessions.some((session) => session.id === selectedSessionId.value)
+    )
+      selectedSessionId.value = store.sessions[0]?.id ?? null
     notifyError('error.deleteGroup')
   } finally {
     groupDeletionBusy.value = false
   }
 }
-function requestRemoveSession() { if (selectedSessionId.value) deleteSessionOpen.value = true }
-function closeSessionDeletion() { if (!sessionDeletionBusy.value) deleteSessionOpen.value = false }
+function requestRemoveSession() {
+  if (selectedSessionId.value) deleteSessionOpen.value = true
+}
+function closeSessionDeletion() {
+  if (!sessionDeletionBusy.value) deleteSessionOpen.value = false
+}
 async function removeSession() {
   if (sessionDeletionBusy.value) return
   if (!selectedSessionId.value) return
@@ -570,7 +871,11 @@ async function removeSession() {
   const previousRules = [...store.rules]
   try {
     await store.deleteSession(id)
-    store.rules.splice(0, store.rules.length, ...store.rules.filter((rule) => rule.sessionId !== id))
+    store.rules.splice(
+      0,
+      store.rules.length,
+      ...store.rules.filter((rule) => rule.sessionId !== id)
+    )
     const index = store.sessions.findIndex((session) => session.id === id)
     if (index >= 0) store.sessions.splice(index, 1)
     selectedSessionId.value = store.sessions[0]?.id ?? null
@@ -620,55 +925,314 @@ onBeforeUnmount(() => {
 <template>
   <main data-testid="via-app" class="via-app">
     <ToastStack :toasts="toast.toasts" />
-    <fieldset data-testid="app-interactions" class="app-interactions" :disabled="authenticationBusy || secretOperationBusy">
-    <div v-if="workspaceReady" class="workspace">
-      <SessionSidebar :groups="groups" :selected-session-id="selectedSessionId ?? ''" @select="selectedSessionId = $event" @create="requestCreateSession" @create-group="createGroupOpen=true" @delete-group="requestRemoveGroup" />
-      <section v-if="selectedSession" class="content">
-        <header class="session-header">
-          <div><p class="section-label">{{ t('title.session') }}</p><h1>{{ selectedSession.name }}</h1><p class="connection"><span class="session-dot" :class="{ connected: isConnected }" />{{ selectedSession.user }}@{{ selectedSession.host || t('message.unconfiguredHost') }}:{{ selectedSession.port }}<span class="connection-state" :class="{ connected: isConnected }">{{ t(isConnected ? 'state.connected' : 'state.disconnected') }}</span></p></div>
-          <div class="header-actions"><span class="button-wrap" :title="connectHint || undefined"><button class="success-button" type="button" :aria-description="connectHint || undefined" :disabled="sessionBusy !== null || isConnected" @click="connect">{{ sessionBusy === 'connect' ? t('common.inProgress', { action: t('action.connectAndStart') }) : t('action.connectAndStart') }}</button></span><span class="button-wrap" :title="disconnectHint || undefined"><button class="danger-button" type="button" :aria-description="disconnectHint || undefined" :disabled="sessionBusy !== null || !isConnected" @click="disconnect">{{ sessionBusy === 'disconnect' ? t('common.inProgress', { action: t('action.disconnect') }) : t('action.disconnect') }}</button></span><span class="button-wrap" :title="reconnectHint || undefined"><button class="secondary-button" type="button" :aria-description="reconnectHint || undefined" :disabled="sessionBusy !== null" @click="reconnect">{{ sessionBusy === 'reconnect' ? t('common.inProgress', { action: t('action.reconnectTunnels') }) : t('action.reconnectTunnels') }}</button></span><button class="danger-button" type="button" @click="requestRemoveSession">{{ t('action.deleteSession') }}</button></div>
-        </header>
-        <TunnelGrid :rules="currentRules" :bulk-busy="bulkOperationsBusy" :session-connected="isConnected" @add="addRule" @update="updateRule" @toggle="toggleRule" @remove="requestRemoveRule" @clone="cloneRule" @start-all="startAll" @stop-all="stopAll" />
-        <section class="session-editor">
-          <div class="editor-title"><span aria-hidden="true">▤</span> {{ t('title.currentSessionConfig') }}</div>
-          <div class="editor-fields">
-            <label>{{ t('field.sessionName') }}<input v-model="selectedSession.name" :aria-label="t('field.sessionName')" @change="persist" /></label>
-            <label>{{ t('field.hostAddress') }}<input v-model="selectedSession.host" :aria-label="t('field.hostAddress')" @change="persist" /></label>
-            <label>{{ t('field.sshPort') }}<input v-model.number="selectedSession.port" type="number" :aria-label="t('field.sshPort')" @change="persist" /></label>
-            <label>{{ t('field.loginUser') }}<input v-model="selectedSession.user" :aria-label="t('field.loginUser')" @change="persist" /></label>
-            <label>{{ t('field.authentication') }}<select :value="selectedSession.auth.kind" :aria-label="t('field.authentication')" :disabled="authenticationControlsBusy" @change="changeAuthenticationKind"><option value="password">{{ t('field.password') }}</option><option value="private_key">{{ t('field.privateKey') }}</option></select></label>
-            <template v-if="selectedSession.auth.kind === 'password'">
-              <label class="authentication-field">{{ t('field.sshPassword') }}<input v-model="passwordDraft" :aria-label="t('field.sshPassword')" type="password" autocomplete="new-password" /></label>
-            </template>
-            <template v-else>
-              <label class="authentication-field">{{ t('field.privateKeyFile') }}<input v-model="selectedSession.auth.path" :aria-label="t('field.privateKeyFile')" @change="persist" /></label>
-              <button data-testid="choose-private-key" class="secondary-button" type="button" :disabled="authenticationControlsBusy" @click="choosePrivateKey">{{ t('action.choosePrivateKey') }}</button>
-              <label class="authentication-field">{{ t('field.privateKeyPassphrase') }}<input v-model="passphraseDraft" :aria-label="t('field.privateKeyPassphrase')" type="password" autocomplete="new-password" /></label>
-            </template>
-            <button data-testid="save-authentication" class="primary-button" type="button" :disabled="authenticationControlsBusy" @click="saveAuthentication">{{ t('action.saveAuthentication') }}</button>
-          </div>
+    <fieldset
+      data-testid="app-interactions"
+      class="app-interactions"
+      :disabled="authenticationBusy || secretOperationBusy"
+    >
+      <div v-if="workspaceReady" class="workspace">
+        <SessionSidebar
+          :groups="groups"
+          :selected-session-id="selectedSessionId ?? ''"
+          @select="selectedSessionId = $event"
+          @create="requestCreateSession"
+          @create-group="createGroupOpen = true"
+          @delete-group="requestRemoveGroup"
+        />
+        <section v-if="selectedSession" class="content">
+          <header class="session-header">
+            <div>
+              <p class="section-label">{{ t('title.session') }}</p>
+              <h1>{{ selectedSession.name }}</h1>
+              <p class="connection">
+                <span
+                  class="session-dot"
+                  :class="{ connected: isConnected }"
+                />{{ selectedSession.user }}@{{
+                  selectedSession.host || t('message.unconfiguredHost')
+                }}:{{ selectedSession.port
+                }}<span
+                  class="connection-state"
+                  :class="{ connected: isConnected }"
+                  >{{
+                    t(isConnected ? 'state.connected' : 'state.disconnected')
+                  }}</span
+                >
+              </p>
+            </div>
+            <div class="header-actions">
+              <span class="button-wrap" :title="connectHint || undefined"
+                ><button
+                  class="success-button"
+                  type="button"
+                  :aria-description="connectHint || undefined"
+                  :disabled="sessionBusy !== null || isConnected"
+                  @click="connect"
+                >
+                  {{
+                    sessionBusy === 'connect'
+                      ? t('common.inProgress', {
+                          action: t('action.connectAndStart'),
+                        })
+                      : t('action.connectAndStart')
+                  }}
+                </button></span
+              ><span class="button-wrap" :title="disconnectHint || undefined"
+                ><button
+                  class="danger-button"
+                  type="button"
+                  :aria-description="disconnectHint || undefined"
+                  :disabled="sessionBusy !== null || !isConnected"
+                  @click="disconnect"
+                >
+                  {{
+                    sessionBusy === 'disconnect'
+                      ? t('common.inProgress', {
+                          action: t('action.disconnect'),
+                        })
+                      : t('action.disconnect')
+                  }}
+                </button></span
+              ><span class="button-wrap" :title="reconnectHint || undefined"
+                ><button
+                  class="secondary-button"
+                  type="button"
+                  :aria-description="reconnectHint || undefined"
+                  :disabled="sessionBusy !== null"
+                  @click="reconnect"
+                >
+                  {{
+                    sessionBusy === 'reconnect'
+                      ? t('common.inProgress', {
+                          action: t('action.reconnectTunnels'),
+                        })
+                      : t('action.reconnectTunnels')
+                  }}
+                </button></span
+              ><button
+                class="danger-button"
+                type="button"
+                @click="requestRemoveSession"
+              >
+                {{ t('action.deleteSession') }}
+              </button>
+            </div>
+          </header>
+          <TunnelGrid
+            :rules="currentRules"
+            :bulk-busy="bulkOperationsBusy"
+            :session-connected="isConnected"
+            @add="addRule"
+            @update="updateRule"
+            @toggle="toggleRule"
+            @remove="requestRemoveRule"
+            @clone="cloneRule"
+            @start-all="startAll"
+            @stop-all="stopAll"
+          />
+          <section class="session-editor">
+            <div class="editor-title">
+              <span aria-hidden="true">▤</span>
+              {{ t('title.currentSessionConfig') }}
+            </div>
+            <div class="editor-fields">
+              <label
+                >{{ t('field.sessionName')
+                }}<input
+                  v-model="selectedSession.name"
+                  :aria-label="t('field.sessionName')"
+                  @change="persist"
+              /></label>
+              <label
+                >{{ t('field.hostAddress')
+                }}<input
+                  v-model="selectedSession.host"
+                  :aria-label="t('field.hostAddress')"
+                  @change="persist"
+              /></label>
+              <label
+                >{{ t('field.sshPort')
+                }}<input
+                  v-model.number="selectedSession.port"
+                  type="number"
+                  :aria-label="t('field.sshPort')"
+                  @change="persist"
+              /></label>
+              <label
+                >{{ t('field.loginUser')
+                }}<input
+                  v-model="selectedSession.user"
+                  :aria-label="t('field.loginUser')"
+                  @change="persist"
+              /></label>
+              <label
+                >{{ t('field.authentication')
+                }}<select
+                  :value="selectedSession.auth.kind"
+                  :aria-label="t('field.authentication')"
+                  :disabled="authenticationControlsBusy"
+                  @change="changeAuthenticationKind"
+                >
+                  <option value="password">{{ t('field.password') }}</option>
+                  <option value="private_key">
+                    {{ t('field.privateKey') }}
+                  </option>
+                </select></label
+              >
+              <template v-if="selectedSession.auth.kind === 'password'">
+                <label class="authentication-field"
+                  >{{ t('field.sshPassword')
+                  }}<input
+                    v-model="passwordDraft"
+                    :aria-label="t('field.sshPassword')"
+                    type="password"
+                    autocomplete="new-password"
+                /></label>
+              </template>
+              <template v-else>
+                <label class="authentication-field"
+                  >{{ t('field.privateKeyFile')
+                  }}<input
+                    v-model="selectedSession.auth.path"
+                    :aria-label="t('field.privateKeyFile')"
+                    @change="persist"
+                /></label>
+                <button
+                  data-testid="choose-private-key"
+                  class="secondary-button"
+                  type="button"
+                  :disabled="authenticationControlsBusy"
+                  @click="choosePrivateKey"
+                >
+                  {{ t('action.choosePrivateKey') }}
+                </button>
+                <label class="authentication-field"
+                  >{{ t('field.privateKeyPassphrase')
+                  }}<input
+                    v-model="passphraseDraft"
+                    :aria-label="t('field.privateKeyPassphrase')"
+                    type="password"
+                    autocomplete="new-password"
+                /></label>
+              </template>
+              <button
+                data-testid="save-authentication"
+                class="primary-button"
+                type="button"
+                :disabled="authenticationControlsBusy"
+                @click="saveAuthentication"
+              >
+                {{ t('action.saveAuthentication') }}
+              </button>
+            </div>
+          </section>
         </section>
-      </section>
-      <EmptyWorkspace v-else @create="requestCreateSession" />
-    </div>
-    <footer class="statusbar">
-      <div class="statusbar-left">
-        <ConfigMenu v-if="workspaceReady" @import="openTransfer('import')" @export="openTransfer('export')" @unlock="openUnlock" @settings="openSettings" />
-        <i data-testid="backend-dot" class="backend-dot" :class="`backend-${backendTone}`" :title="backendLabel" :aria-label="backendLabel" />
+        <EmptyWorkspace v-else @create="requestCreateSession" />
       </div>
-      <span>{{ t('status.tunnels', { active: activeCount, errors: errorCount }) }}</span>
-    </footer>
-    <ImportDialog :open="importMode!==null" :mode="importMode ?? 'import'" :export-json="exportedJson" @close="importMode=null" @confirm="transfer" />
-    <SecretSetupDialog :open="setupOpen" @setup="initializeSecrets" />
-    <SecretUnlockDialog :open="unlockOpen" @close="closeUnlock" @unlock="unlock" @recover="recover" @mode-change="changeUnlockMode" />
-    <RecoveryCodesDialog :open="recoveryCodes.length > 0" :codes="recoveryCodes" @acknowledge="acknowledgeRecoveryCodes" />
-    <HostTrustDialog :open="hostTrust!==null" :host="hostTrust?.host ?? ''" :port="hostTrust?.port ?? 22" :algorithm="hostTrust?.algorithm ?? ''" :fingerprint="hostTrust?.fingerprint ?? ''" @close="hostTrust=null" @approve="approveHostTrust" />
-    <ConfirmDialog :open="deleteSessionOpen" :busy="sessionDeletionBusy" :title="t('dialog.deleteSession.title')" :message="t('dialog.deleteSession.message')" :confirm-text="t('action.deleteSession')" @close="closeSessionDeletion" @confirm="removeSession" />
-    <ConfirmDialog :open="pendingRuleId!==null" :busy="ruleDeletionBusy" :title="t('dialog.deleteRule.title')" :message="t('dialog.deleteRule.message')" :confirm-text="t('action.deleteRule')" @close="closeRuleDeletion" @confirm="removeRule" />
-    <ConfirmDialog :key="pendingGroupDeletion?.generation ?? 0" :generation="pendingGroupDeletion?.generation ?? 0" :open="pendingGroupDeletion!==null" :busy="groupDeletionBusy" :title="t('dialog.deleteGroup.title')" :message="deleteGroupMessage" :confirm-text="t('sidebar.deleteGroup')" @close="closeGroupDeletion" @confirm="removeGroup" @ready="armGroupDeletionConfirmation" />
-    <CreateGroupDialog :open="createGroupOpen" @close="createGroupOpen=false" @create="createGroup" />
-    <CreateSessionDialog :open="createSessionOpen" :groups="store.groups" @close="createSessionOpen=false" @create="addSession" />
-    <SettingsDialog :open="settingsOpen" :preferences="preferences" :saving="preferenceSaving" :preferences-error="preferenceErrorMessage" :master-password-changing="masterPasswordChanging" :master-password-configured="store.secretStoreConfigured === true" :master-password-error="masterPasswordErrorMessage" :master-password-changed-token="masterPasswordChangedToken" @update-preferences="updatePreferences" @change-master-password="changeMasterPassword" @close="closeSettings" />
+      <footer class="statusbar">
+        <div class="statusbar-left">
+          <ConfigMenu
+            v-if="workspaceReady"
+            @import="openTransfer('import')"
+            @export="openTransfer('export')"
+            @unlock="openUnlock"
+            @settings="openSettings"
+          />
+          <i
+            data-testid="backend-dot"
+            class="backend-dot"
+            :class="`backend-${backendTone}`"
+            :title="backendLabel"
+            :aria-label="backendLabel"
+          />
+        </div>
+        <span>{{
+          t('status.tunnels', { active: activeCount, errors: errorCount })
+        }}</span>
+      </footer>
+      <ImportDialog
+        :open="importMode !== null"
+        :mode="importMode ?? 'import'"
+        :export-json="exportedJson"
+        @close="importMode = null"
+        @confirm="transfer"
+      />
+      <SecretSetupDialog :open="setupOpen" @setup="initializeSecrets" />
+      <SecretUnlockDialog
+        :open="unlockOpen"
+        @close="closeUnlock"
+        @unlock="unlock"
+        @recover="recover"
+        @mode-change="changeUnlockMode"
+      />
+      <RecoveryCodesDialog
+        :open="recoveryCodes.length > 0"
+        :codes="recoveryCodes"
+        @acknowledge="acknowledgeRecoveryCodes"
+      />
+      <HostTrustDialog
+        :open="hostTrust !== null"
+        :host="hostTrust?.host ?? ''"
+        :port="hostTrust?.port ?? 22"
+        :algorithm="hostTrust?.algorithm ?? ''"
+        :fingerprint="hostTrust?.fingerprint ?? ''"
+        @close="hostTrust = null"
+        @approve="approveHostTrust"
+      />
+      <ConfirmDialog
+        :open="deleteSessionOpen"
+        :busy="sessionDeletionBusy"
+        :title="t('dialog.deleteSession.title')"
+        :message="t('dialog.deleteSession.message')"
+        :confirm-text="t('action.deleteSession')"
+        @close="closeSessionDeletion"
+        @confirm="removeSession"
+      />
+      <ConfirmDialog
+        :open="pendingRuleId !== null"
+        :busy="ruleDeletionBusy"
+        :title="t('dialog.deleteRule.title')"
+        :message="t('dialog.deleteRule.message')"
+        :confirm-text="t('action.deleteRule')"
+        @close="closeRuleDeletion"
+        @confirm="removeRule"
+      />
+      <ConfirmDialog
+        :key="pendingGroupDeletion?.generation ?? 0"
+        :generation="pendingGroupDeletion?.generation ?? 0"
+        :open="pendingGroupDeletion !== null"
+        :busy="groupDeletionBusy"
+        :title="t('dialog.deleteGroup.title')"
+        :message="deleteGroupMessage"
+        :confirm-text="t('sidebar.deleteGroup')"
+        @close="closeGroupDeletion"
+        @confirm="removeGroup"
+        @ready="armGroupDeletionConfirmation"
+      />
+      <CreateGroupDialog
+        :open="createGroupOpen"
+        @close="createGroupOpen = false"
+        @create="createGroup"
+      />
+      <CreateSessionDialog
+        :open="createSessionOpen"
+        :groups="store.groups"
+        @close="createSessionOpen = false"
+        @create="addSession"
+      />
+      <SettingsDialog
+        :open="settingsOpen"
+        :preferences="preferences"
+        :saving="preferenceSaving"
+        :preferences-error="preferenceErrorMessage"
+        :master-password-changing="masterPasswordChanging"
+        :master-password-configured="store.secretStoreConfigured === true"
+        :master-password-error="masterPasswordErrorMessage"
+        :master-password-changed-token="masterPasswordChangedToken"
+        @update-preferences="updatePreferences"
+        @change-master-password="changeMasterPassword"
+        @close="closeSettings"
+      />
     </fieldset>
   </main>
 </template>
@@ -677,7 +1241,7 @@ onBeforeUnmount(() => {
 :root {
   color: #000000;
   background: #c6c6c6;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --canvas: #c6c6c6;
   --surface: #c6c6c6;
   --surface-raised: #c6c6c6;
@@ -692,19 +1256,43 @@ onBeforeUnmount(() => {
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
-  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / .7), 0 1px 2px rgb(0 0 0 / .2);
-  --shadow-raised-active: inset 1px 1px 3px rgb(0 0 0 / .2);
-  --shadow-inset: inset 1px 1px 2px rgb(0 0 0 / .12);
-  --shadow-drop: 0 6px 16px rgb(0 0 0 / .22);
-  --font-ui: "Pixelify Sans", "Geneva", -apple-system, sans-serif;
+  --shadow-raised:
+    inset 0 1px 0 rgb(255 255 255 / 0.7), 0 1px 2px rgb(0 0 0 / 0.2);
+  --shadow-raised-active: inset 1px 1px 3px rgb(0 0 0 / 0.2);
+  --shadow-inset: inset 1px 1px 2px rgb(0 0 0 / 0.12);
+  --shadow-drop: 0 6px 16px rgb(0 0 0 / 0.22);
+  --font-ui: 'Pixelify Sans', 'Geneva', -apple-system, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-* { box-sizing: border-box; }
-body { margin: 0; min-width: 980px; }
-button, input, select { font: inherit; }
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 980px;
+}
+button,
+input,
+select {
+  font: inherit;
+}
 
-.via-app { display: flex; min-height: 100vh; flex-direction: column; background: var(--canvas); }
-.app-interactions { display: flex; min-width: 0; min-height: 100vh; flex: 1; flex-direction: column; margin: 0; border: 0; padding: 0; }
+.via-app {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  background: var(--canvas);
+}
+.app-interactions {
+  display: flex;
+  min-width: 0;
+  min-height: 100vh;
+  flex: 1;
+  flex-direction: column;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
 
 button {
   border: 1px solid var(--line);
@@ -716,45 +1304,178 @@ button {
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
 }
-button:active { box-shadow: var(--shadow-raised-active); }
-button:disabled { opacity: .6; cursor: not-allowed; }
-.primary-button { border-width: 2px; font-weight: 700; }
-.secondary-button, .success-button, .danger-button { border: 1px solid var(--line); }
+button:active {
+  box-shadow: var(--shadow-raised-active);
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.primary-button {
+  border-width: 2px;
+  font-weight: 700;
+}
+.secondary-button,
+.success-button,
+.danger-button {
+  border: 1px solid var(--line);
+}
 
-.workspace { display: flex; min-height: 0; flex: 1; }
-.content { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.workspace {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.content {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
 
-.session-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface); padding: 17px 20px; }
-.section-label { margin: 0 0 4px; color: var(--text); font-family: var(--font-ui); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.session-header h1 { margin: 0; font-size: 16px; font-family: var(--font-ui); }
-.connection { display: flex; align-items: center; gap: 6px; margin: 5px 0 0; color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
-.statusbar-left { display: flex; align-items: center; gap: 8px; }
-.backend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-.backend-dot.backend-connecting { background: var(--yellow); }
-.backend-dot.backend-failed { background: var(--red); }
-.connected { color: var(--green); font-size: 12px; }
-.session-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-.session-dot.connected { background: var(--green); }
-.connection-state { margin-left: 8px; color: var(--muted); }
-.connection-state.connected { color: var(--green); }
+.session-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  padding: 17px 20px;
+}
+.section-label {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.session-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-family: var(--font-ui);
+}
+.connection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.statusbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.backend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.backend-dot.backend-connecting {
+  background: var(--yellow);
+}
+.backend-dot.backend-failed {
+  background: var(--red);
+}
+.connected {
+  color: var(--green);
+  font-size: 12px;
+}
+.session-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.session-dot.connected {
+  background: var(--green);
+}
+.connection-state {
+  margin-left: 8px;
+  color: var(--muted);
+}
+.connection-state.connected {
+  color: var(--green);
+}
 
-.session-editor { border-top: 1px solid var(--line); background: var(--surface); padding: 14px 20px 17px; }
-.editor-title { margin-bottom: 11px; color: var(--text); font-size: 12px; font-weight: 700; font-family: var(--font-ui); }
-.editor-fields { display: grid; grid-template-columns: 1fr 1.3fr 90px 1fr 1.5fr; gap: 12px; }
-.editor-fields label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
-.editor-fields input, .editor-fields select {
-  min-width: 0; border: 1px solid var(--line); outline: 0; background: var(--content);
-  padding: 7px 8px; color: var(--text); font-size: 12px; font-family: var(--font-mono);
+.session-editor {
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  padding: 14px 20px 17px;
+}
+.editor-title {
+  margin-bottom: 11px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+}
+.editor-fields {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr 90px 1fr 1.5fr;
+  gap: 12px;
+}
+.editor-fields label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.editor-fields input,
+.editor-fields select {
+  min-width: 0;
+  border: 1px solid var(--line);
+  outline: 0;
+  background: var(--content);
+  padding: 7px 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-mono);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-inset);
 }
-.editor-fields > button { align-self: end; }
+.editor-fields > button {
+  align-self: end;
+}
 
-.statusbar { display: flex; height: 26px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding: 0 17px; color: var(--muted); font-size: 11px; font-family: var(--font-mono); }
-.statusbar span { display: flex; align-items: center; gap: 6px; }
+.statusbar {
+  display: flex;
+  height: 26px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding: 0 17px;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+.statusbar span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
-::selection { background: #000000; color: #ffffff; }
-:focus-visible { outline: 1px solid #000000; outline-offset: 1px; }
+::selection {
+  background: #000000;
+  color: #ffffff;
+}
+:focus-visible {
+  outline: 1px solid #000000;
+  outline-offset: 1px;
+}
 
-@media (max-width: 1100px) { .editor-fields { grid-template-columns: repeat(2, 1fr); }.key-path { grid-column: span 2; } }
+@media (max-width: 1100px) {
+  .editor-fields {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .key-path {
+    grid-column: span 2;
+  }
+}
 </style>

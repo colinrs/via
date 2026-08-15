@@ -1,12 +1,7 @@
 export type Id = string
 
 export type TunnelState =
-  | 'stopped'
-  | 'starting'
-  | 'active'
-  | 'reconnecting'
-  | 'conflict'
-  | 'failed'
+  'stopped' | 'starting' | 'active' | 'reconnecting' | 'conflict' | 'failed'
 
 export interface PasswordAuthConfig {
   kind: 'password'

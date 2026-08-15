@@ -1,18 +1,39 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createViaStore, type ViaBridge } from './via'
 
-async function storeWithRuntimeHandler(rules: Array<{ id: string; sessionId: string; enabled: boolean; localPort: number; targetHost: string; targetPort: number; note: string; runtimeState?: string }>) {
+async function storeWithRuntimeHandler(
+  rules: Array<{
+    id: string
+    sessionId: string
+    enabled: boolean
+    localPort: number
+    targetHost: string
+    targetPort: number
+    note: string
+    runtimeState?: string
+  }>
+) {
   let runtimeHandler: ((payload: unknown) => void) | undefined
   const config = { schemaVersion: 1, groups: [], sessions: [], rules }
-  const invoke = vi.fn().mockImplementation((command: string) => command === 'load_config'
-    ? Promise.resolve(config)
-    : command === 'secret_store_status' ? Promise.resolve({ configured: true }) : Promise.resolve())
+  const invoke = vi
+    .fn()
+    .mockImplementation((command: string) =>
+      command === 'load_config'
+        ? Promise.resolve(config)
+        : command === 'secret_store_status'
+          ? Promise.resolve({ configured: true })
+          : Promise.resolve()
+    )
   const store = createViaStore({
     invoke,
-    listen: vi.fn().mockImplementation((_event: string, handler: (payload: unknown) => void) => {
-      runtimeHandler = handler
-      return Promise.resolve(() => {})
-    }),
+    listen: vi
+      .fn()
+      .mockImplementation(
+        (_event: string, handler: (payload: unknown) => void) => {
+          runtimeHandler = handler
+          return Promise.resolve(() => {})
+        }
+      ),
   } as ViaBridge)
   await store.initialize()
   return { store, fire: (payload: unknown) => runtimeHandler?.(payload) }
@@ -25,11 +46,20 @@ describe('ViaStore', () => {
   it('retries startup loading and becomes ready after the backend is available', async () => {
     vi.useFakeTimers()
     try {
-      const invoke = vi.fn().mockRejectedValueOnce(new Error('bridge unavailable'))
-        .mockImplementation((command: string) => command === 'load_config'
-          ? emptyConfig
-          : command === 'secret_store_status' ? { configured: true } : undefined)
-      const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+      const invoke = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('bridge unavailable'))
+        .mockImplementation((command: string) =>
+          command === 'load_config'
+            ? emptyConfig
+            : command === 'secret_store_status'
+              ? { configured: true }
+              : undefined
+        )
+      const store = createViaStore({
+        invoke,
+        listen: vi.fn().mockResolvedValue(() => {}),
+      } as ViaBridge)
 
       const initialized = store.initialize()
       void initialized.catch(() => undefined)
@@ -48,7 +78,10 @@ describe('ViaStore', () => {
     vi.useFakeTimers()
     try {
       const invoke = vi.fn().mockRejectedValue(new Error('bridge unavailable'))
-      const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+      const store = createViaStore({
+        invoke,
+        listen: vi.fn().mockResolvedValue(() => {}),
+      } as ViaBridge)
 
       const initialized = store.initialize()
       void initialized.catch(() => undefined)
@@ -66,9 +99,15 @@ describe('ViaStore', () => {
 
   it('fails initialization when the runtime-state listener cannot be registered', async () => {
     const store = createViaStore({
-      invoke: vi.fn().mockImplementation((command: string) => command === 'load_config'
-        ? emptyConfig
-        : command === 'secret_store_status' ? { configured: true } : undefined),
+      invoke: vi
+        .fn()
+        .mockImplementation((command: string) =>
+          command === 'load_config'
+            ? emptyConfig
+            : command === 'secret_store_status'
+              ? { configured: true }
+              : undefined
+        ),
       listen: vi.fn().mockRejectedValue(new Error('listener unavailable')),
     } as ViaBridge)
 
@@ -100,27 +139,50 @@ describe('ViaStore', () => {
   })
 
   it('loads validated preferences and sends a complete preference update', async () => {
-    const invoke = vi.fn().mockImplementation((command: string) => command === 'load_preferences'
-      ? { language: 'en', fontSize: 'large', theme: 'dark' } : null)
+    const invoke = vi
+      .fn()
+      .mockImplementation((command: string) =>
+        command === 'load_preferences'
+          ? { language: 'en', fontSize: 'large', theme: 'dark' }
+          : null
+      )
     const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
 
     await store.loadPreferences()
-    expect(store.preferences).toEqual({ language: 'en', fontSize: 'large', theme: 'dark' })
+    expect(store.preferences).toEqual({
+      language: 'en',
+      fontSize: 'large',
+      theme: 'dark',
+    })
 
-    await store.savePreferences({ language: 'zh-CN', fontSize: 'small', theme: 'light' })
+    await store.savePreferences({
+      language: 'zh-CN',
+      fontSize: 'small',
+      theme: 'light',
+    })
 
-    expect(invoke).toHaveBeenCalledWith('save_preferences', { preferences: { language: 'zh-CN', fontSize: 'small', theme: 'light' } })
+    expect(invoke).toHaveBeenCalledWith('save_preferences', {
+      preferences: { language: 'zh-CN', fontSize: 'small', theme: 'light' },
+    })
   })
 
   it('keeps a canonical preference copy after the caller mutates a saved input', async () => {
     const invoke = vi.fn().mockResolvedValue(null)
     const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
-    const preferences = { language: 'en', fontSize: 'large', theme: 'dark' } as const
+    const preferences = {
+      language: 'en',
+      fontSize: 'large',
+      theme: 'dark',
+    } as const
 
     await store.savePreferences(preferences)
     ;(preferences as { language: string }).language = 'system'
 
-    expect(store.preferences).toEqual({ language: 'en', fontSize: 'large', theme: 'dark' })
+    expect(store.preferences).toEqual({
+      language: 'en',
+      fontSize: 'large',
+      theme: 'dark',
+    })
   })
 
   it('rejects malformed preference responses without replacing the current preferences', async () => {
@@ -137,13 +199,18 @@ describe('ViaStore', () => {
 
     for (const payload of invalidPayloads) {
       const store = createViaStore({
-        invoke: vi.fn().mockImplementation((command: string) => command === 'load_preferences'
-          ? payload : null),
+        invoke: vi
+          .fn()
+          .mockImplementation((command: string) =>
+            command === 'load_preferences' ? payload : null
+          ),
         listen: vi.fn(),
       } as ViaBridge)
       const previous = { ...store.preferences }
 
-      await expect(store.loadPreferences()).rejects.toThrow('invalid preferences')
+      await expect(store.loadPreferences()).rejects.toThrow(
+        'invalid preferences'
+      )
       expect(store.preferences).toEqual(previous)
     }
   })
@@ -152,10 +219,21 @@ describe('ViaStore', () => {
     const invoke = vi.fn().mockResolvedValue(null)
     const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
 
-    await expect(store.savePreferences({ language: 'en', fontSize: 'medium', theme: 'dark', extra: true } as unknown as typeof store.preferences)).rejects.toThrow('invalid preferences')
+    await expect(
+      store.savePreferences({
+        language: 'en',
+        fontSize: 'medium',
+        theme: 'dark',
+        extra: true,
+      } as unknown as typeof store.preferences)
+    ).rejects.toThrow('invalid preferences')
 
     expect(invoke).not.toHaveBeenCalled()
-    expect(store.preferences).toEqual({ language: 'system', fontSize: 'medium', theme: 'system' })
+    expect(store.preferences).toEqual({
+      language: 'system',
+      fontSize: 'medium',
+      theme: 'system',
+    })
   })
 
   it('requires a null unit response before applying a preference save', async () => {
@@ -166,8 +244,18 @@ describe('ViaStore', () => {
         listen: vi.fn(),
       } as ViaBridge)
 
-      await expect(store.savePreferences({ language: 'en', fontSize: 'large', theme: 'dark' })).rejects.toThrow('invalid unit response')
-      expect(store.preferences).toEqual({ language: 'system', fontSize: 'medium', theme: 'system' })
+      await expect(
+        store.savePreferences({
+          language: 'en',
+          fontSize: 'large',
+          theme: 'dark',
+        })
+      ).rejects.toThrow('invalid unit response')
+      expect(store.preferences).toEqual({
+        language: 'system',
+        fontSize: 'medium',
+        theme: 'system',
+      })
     }
   })
 
@@ -175,16 +263,28 @@ describe('ViaStore', () => {
     const invoke = vi.fn().mockRejectedValue(new Error('save failed'))
     const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
 
-    await expect(store.savePreferences({ language: 'en', fontSize: 'large', theme: 'dark' })).rejects.toThrow('save failed')
+    await expect(
+      store.savePreferences({
+        language: 'en',
+        fontSize: 'large',
+        theme: 'dark',
+      })
+    ).rejects.toThrow('save failed')
 
-    expect(store.preferences).toEqual({ language: 'system', fontSize: 'medium', theme: 'system' })
+    expect(store.preferences).toEqual({
+      language: 'system',
+      fontSize: 'medium',
+      theme: 'system',
+    })
   })
 
   it('requires a null unit response when changing the master password without retaining either password', async () => {
     const invoke = vi.fn().mockResolvedValue(null)
     const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
 
-    await expect(store.changeMasterPassword('current password', 'new password')).resolves.toBeUndefined()
+    await expect(
+      store.changeMasterPassword('current password', 'new password')
+    ).resolves.toBeUndefined()
 
     expect(invoke).toHaveBeenCalledWith('change_master_password', {
       currentPassword: 'current password',
@@ -201,20 +301,30 @@ describe('ViaStore', () => {
         listen: vi.fn(),
       } as ViaBridge)
 
-      await expect(store.changeMasterPassword('current password', 'new password')).rejects.toThrow('invalid unit response')
+      await expect(
+        store.changeMasterPassword('current password', 'new password')
+      ).rejects.toThrow('invalid unit response')
     }
   })
 
   it('starts enabled rules through the selected session command', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined)
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
     await store.startEnabledRules('session-1')
-    expect(invoke).toHaveBeenCalledWith('start_enabled_rules', { sessionId: 'session-1' })
+    expect(invoke).toHaveBeenCalledWith('start_enabled_rules', {
+      sessionId: 'session-1',
+    })
   })
 
   it('deletes a group through the typed bridge wrapper', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined)
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
     await store.deleteGroup('group-1')
 
@@ -223,7 +333,10 @@ describe('ViaStore', () => {
 
   it('deletes a rule through the typed bridge wrapper', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined)
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
     await store.deleteRule('rule-1')
 
@@ -231,10 +344,19 @@ describe('ViaStore', () => {
   })
 
   it('records that initial setup is required after config loading', async () => {
-    const invoke = vi.fn().mockImplementation((command: string) => command === 'load_config'
-      ? emptyConfig
-      : command === 'secret_store_status' ? { configured: false } : undefined)
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const invoke = vi
+      .fn()
+      .mockImplementation((command: string) =>
+        command === 'load_config'
+          ? emptyConfig
+          : command === 'secret_store_status'
+            ? { configured: false }
+            : undefined
+      )
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
     await store.initialize()
 
@@ -244,12 +366,23 @@ describe('ViaStore', () => {
   })
 
   it('fails closed when secret-store status is malformed', async () => {
-    const invoke = vi.fn().mockImplementation((command: string) => command === 'load_config'
-      ? emptyConfig
-      : command === 'secret_store_status' ? {} : undefined)
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const invoke = vi
+      .fn()
+      .mockImplementation((command: string) =>
+        command === 'load_config'
+          ? emptyConfig
+          : command === 'secret_store_status'
+            ? {}
+            : undefined
+      )
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
-    await expect(store.initialize()).rejects.toThrow('invalid secret store status')
+    await expect(store.initialize()).rejects.toThrow(
+      'invalid secret store status'
+    )
 
     expect(store.initializationState).toBe('failed')
     expect(store.secretStoreConfigured).toBeNull()
@@ -257,7 +390,10 @@ describe('ViaStore', () => {
 
   it('refreshes configured vault status without inventing recovery codes', async () => {
     const invoke = vi.fn().mockResolvedValue({ configured: true })
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
     await expect(store.refreshSecretStoreStatus()).resolves.toBeNull()
 
@@ -267,54 +403,88 @@ describe('ViaStore', () => {
 
   it('initializes the vault and returns its one-time recovery codes', async () => {
     const invoke = vi.fn().mockResolvedValue(tenCodes)
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
-    await expect(store.initializeSecrets('new password')).resolves.toEqual(tenCodes)
+    await expect(store.initializeSecrets('new password')).resolves.toEqual(
+      tenCodes
+    )
 
     expect(store.secretStoreConfigured).toBe(true)
-    expect(invoke).toHaveBeenCalledWith('initialize_secrets', { masterPassword: 'new password' })
+    expect(invoke).toHaveBeenCalledWith('initialize_secrets', {
+      masterPassword: 'new password',
+    })
     expect(JSON.stringify(store)).not.toContain('new password')
   })
 
   it('returns optional migration recovery codes when unlocking the vault', async () => {
     const invoke = vi.fn().mockResolvedValue(tenCodes)
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
-    await expect(store.unlockSecrets('master password')).resolves.toEqual(tenCodes)
+    await expect(store.unlockSecrets('master password')).resolves.toEqual(
+      tenCodes
+    )
 
-    expect(invoke).toHaveBeenCalledWith('unlock_secrets', { masterPassword: 'master password' })
+    expect(invoke).toHaveBeenCalledWith('unlock_secrets', {
+      masterPassword: 'master password',
+    })
     expect(JSON.stringify(store)).not.toContain('master password')
   })
 
   it('sends recovery credentials without retaining them in global state', async () => {
     const invoke = vi.fn().mockResolvedValue(tenCodes)
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
-    await expect(store.recoverSecrets('old-code', 'new password')).resolves.toEqual(tenCodes)
+    await expect(
+      store.recoverSecrets('old-code', 'new password')
+    ).resolves.toEqual(tenCodes)
 
     expect(store.secretStoreConfigured).toBe(true)
-    expect(invoke).toHaveBeenCalledWith('recover_secrets', { recoveryCode: 'old-code', newMasterPassword: 'new password' })
+    expect(invoke).toHaveBeenCalledWith('recover_secrets', {
+      recoveryCode: 'old-code',
+      newMasterPassword: 'new password',
+    })
     expect(JSON.stringify(store)).not.toContain('old-code')
     expect(JSON.stringify(store)).not.toContain('new password')
   })
 
   it('rejects malformed recovery-code results without marking setup complete', async () => {
     const invoke = vi.fn().mockResolvedValue(['ONLY-ONE'])
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
-    await expect(store.initializeSecrets('new password')).rejects.toThrow('invalid recovery codes')
+    await expect(store.initializeSecrets('new password')).rejects.toThrow(
+      'invalid recovery codes'
+    )
 
     expect(store.secretStoreConfigured).toBeNull()
   })
 
   it('accepts only null or ten unique nonblank codes from unlock', async () => {
-    const invalidResults: unknown[] = [undefined, ['ONE'], [...tenCodes.slice(0, 9), tenCodes[0]], [...tenCodes.slice(0, 9), '   ']]
+    const invalidResults: unknown[] = [
+      undefined,
+      ['ONE'],
+      [...tenCodes.slice(0, 9), tenCodes[0]],
+      [...tenCodes.slice(0, 9), '   '],
+    ]
     for (const result of invalidResults) {
       const store = createViaStore({
         invoke: vi.fn().mockResolvedValue(result),
         listen: vi.fn().mockResolvedValue(() => {}),
       } as ViaBridge)
-      await expect(store.unlockSecrets('master password')).rejects.toThrow('invalid recovery codes')
+      await expect(store.unlockSecrets('master password')).rejects.toThrow(
+        'invalid recovery codes'
+      )
     }
 
     const store = createViaStore({
@@ -328,24 +498,67 @@ describe('ViaStore', () => {
     const initialConfig = {
       schemaVersion: 1,
       groups: [{ id: 'group-old', name: 'Old' }],
-      sessions: [{ id: 'session-old', groupId: 'group-old', name: 'Old', host: 'old.example', port: 22, user: 'old', auth: { kind: 'password' as const, secretId: null } }],
+      sessions: [
+        {
+          id: 'session-old',
+          groupId: 'group-old',
+          name: 'Old',
+          host: 'old.example',
+          port: 22,
+          user: 'old',
+          auth: { kind: 'password' as const, secretId: null },
+        },
+      ],
       rules: [],
     }
     const persistedConfig = {
       schemaVersion: 1,
       groups: [{ id: 'group-new', name: 'New' }],
-      sessions: [{ id: 'session-1', groupId: 'group-new', name: 'Server', host: 'new.example', port: 22, user: 'via', auth: { kind: 'password' as const, secretId: 'secret-1' } }],
-      rules: [{ id: 'rule-1', sessionId: 'session-1', enabled: true, localPort: 8080, targetHost: 'localhost', targetPort: 80, note: '', runtimeState: 'stopped' as const }],
+      sessions: [
+        {
+          id: 'session-1',
+          groupId: 'group-new',
+          name: 'Server',
+          host: 'new.example',
+          port: 22,
+          user: 'via',
+          auth: { kind: 'password' as const, secretId: 'secret-1' },
+        },
+      ],
+      rules: [
+        {
+          id: 'rule-1',
+          sessionId: 'session-1',
+          enabled: true,
+          localPort: 8080,
+          targetHost: 'localhost',
+          targetPort: 80,
+          note: '',
+          runtimeState: 'stopped' as const,
+        },
+      ],
     }
-    const invoke = vi.fn().mockImplementation((command: string) => command === 'load_config'
-      ? initialConfig
-      : command === 'secret_store_status' ? { configured: true } : persistedConfig)
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const invoke = vi
+      .fn()
+      .mockImplementation((command: string) =>
+        command === 'load_config'
+          ? initialConfig
+          : command === 'secret_store_status'
+            ? { configured: true }
+            : persistedConfig
+      )
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
     await store.initialize()
 
     await store.saveSessionSecret('session-1', 'ssh password')
 
-    expect(invoke).toHaveBeenCalledWith('save_session_secret', { sessionId: 'session-1', secret: 'ssh password' })
+    expect(invoke).toHaveBeenCalledWith('save_session_secret', {
+      sessionId: 'session-1',
+      secret: 'ssh password',
+    })
     expect(store.groups).toEqual(persistedConfig.groups)
     expect(store.sessions).toEqual(persistedConfig.sessions)
     expect(store.rules).toEqual(persistedConfig.rules)
@@ -354,12 +567,57 @@ describe('ViaStore', () => {
 
   it('reconnects a session after a reconnecting runtime update', async () => {
     vi.useFakeTimers()
-    let runtimeHandler: ((value: { rules: Array<{ ruleId: string; state: 'reconnecting'; message: null }> }) => void) | undefined
-    const invoke = vi.fn().mockImplementation((command: string) => command === 'load_config'
-      ? Promise.resolve({ schemaVersion: 1, groups: [], sessions: [{ id: 's', groupId: 'g', name: 'n', host: 'h', port: 22, user: 'u', auth: { kind: 'password', secretId: null } }], rules: [{ id: 'r', sessionId: 's', enabled: true, localPort: 1, targetHost: 'h', targetPort: 1, note: '', runtimeState: 'stopped' }] })
-      : command === 'secret_store_status' ? Promise.resolve({ configured: true }) : Promise.resolve())
-    const store = createViaStore({ invoke, listen: vi.fn().mockImplementation((_event, handler) => { runtimeHandler = handler; return Promise.resolve(() => {}) }) } as ViaBridge)
-    await store.initialize(); runtimeHandler?.({ rules: [{ ruleId: 'r', state: 'reconnecting', message: null }] })
+    let runtimeHandler:
+      | ((value: {
+          rules: Array<{ ruleId: string; state: 'reconnecting'; message: null }>
+        }) => void)
+      | undefined
+    const invoke = vi
+      .fn()
+      .mockImplementation((command: string) =>
+        command === 'load_config'
+          ? Promise.resolve({
+              schemaVersion: 1,
+              groups: [],
+              sessions: [
+                {
+                  id: 's',
+                  groupId: 'g',
+                  name: 'n',
+                  host: 'h',
+                  port: 22,
+                  user: 'u',
+                  auth: { kind: 'password', secretId: null },
+                },
+              ],
+              rules: [
+                {
+                  id: 'r',
+                  sessionId: 's',
+                  enabled: true,
+                  localPort: 1,
+                  targetHost: 'h',
+                  targetPort: 1,
+                  note: '',
+                  runtimeState: 'stopped',
+                },
+              ],
+            })
+          : command === 'secret_store_status'
+            ? Promise.resolve({ configured: true })
+            : Promise.resolve()
+      )
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockImplementation((_event, handler) => {
+        runtimeHandler = handler
+        return Promise.resolve(() => {})
+      }),
+    } as ViaBridge)
+    await store.initialize()
+    runtimeHandler?.({
+      rules: [{ ruleId: 'r', state: 'reconnecting', message: null }],
+    })
     await vi.advanceTimersByTimeAsync(1_000)
     expect(invoke).toHaveBeenCalledWith('connect_session', { sessionId: 's' })
     vi.useRealTimers()
@@ -367,10 +625,21 @@ describe('ViaStore', () => {
 
   it('applies a well-formed runtime snapshot to rules and connection state', async () => {
     const { store, fire } = await storeWithRuntimeHandler([
-      { id: 'rule-a', sessionId: 'session-a', enabled: true, localPort: 1, targetHost: 'h', targetPort: 1, note: '' },
+      {
+        id: 'rule-a',
+        sessionId: 'session-a',
+        enabled: true,
+        localPort: 1,
+        targetHost: 'h',
+        targetPort: 1,
+        note: '',
+      },
     ])
 
-    fire({ rules: [{ ruleId: 'rule-a', state: 'active', message: null }], connectedSessionIds: ['session-a'] })
+    fire({
+      rules: [{ ruleId: 'rule-a', state: 'active', message: null }],
+      connectedSessionIds: ['session-a'],
+    })
 
     expect(store.rules[0].runtimeState).toBe('active')
     expect(store.connectedSessionIds).toEqual(['session-a'])
@@ -391,7 +660,15 @@ describe('ViaStore', () => {
     ]
     for (const payload of invalidPayloads) {
       const { store, fire } = await storeWithRuntimeHandler([
-        { id: 'rule-a', sessionId: 'session-a', enabled: true, localPort: 1, targetHost: 'h', targetPort: 1, note: '' },
+        {
+          id: 'rule-a',
+          sessionId: 'session-a',
+          enabled: true,
+          localPort: 1,
+          targetHost: 'h',
+          targetPort: 1,
+          note: '',
+        },
       ])
       fire(payload)
       expect(store.rules[0].runtimeState).toBe('stopped')
@@ -400,15 +677,32 @@ describe('ViaStore', () => {
   })
 
   it('defaults a loaded rule runtimeState to stopped when the backend omits it', async () => {
-    const invoke = vi.fn().mockImplementation((command: string) => command === 'load_config'
-      ? Promise.resolve({
-          schemaVersion: 1,
-          groups: [],
-          sessions: [],
-          rules: [{ id: 'rule-a', sessionId: 'session-a', enabled: true, localPort: 1, targetHost: 'h', targetPort: 1, note: '' }],
-        })
-      : command === 'secret_store_status' ? Promise.resolve({ configured: true }) : Promise.resolve())
-    const store = createViaStore({ invoke, listen: vi.fn().mockResolvedValue(() => {}) } as ViaBridge)
+    const invoke = vi.fn().mockImplementation((command: string) =>
+      command === 'load_config'
+        ? Promise.resolve({
+            schemaVersion: 1,
+            groups: [],
+            sessions: [],
+            rules: [
+              {
+                id: 'rule-a',
+                sessionId: 'session-a',
+                enabled: true,
+                localPort: 1,
+                targetHost: 'h',
+                targetPort: 1,
+                note: '',
+              },
+            ],
+          })
+        : command === 'secret_store_status'
+          ? Promise.resolve({ configured: true })
+          : Promise.resolve()
+    )
+    const store = createViaStore({
+      invoke,
+      listen: vi.fn().mockResolvedValue(() => {}),
+    } as ViaBridge)
 
     await store.initialize()
 

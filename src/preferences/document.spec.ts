@@ -14,18 +14,26 @@ describe('applyDocumentPreferences', () => {
     const cleanup = applyDocumentPreferences(
       { language: 'system', fontSize: 'large', theme: 'system' },
       { navigator: { language: 'zh-Hans-CN' } },
-      document,
+      document
     )
 
     expect(document.documentElement.lang).toBe('zh-CN')
     expect(document.documentElement.dataset.theme).toBe('mac')
     expect(document.documentElement.dataset.fontSize).toBe('large')
-    expect(document.documentElement.style.getPropertyValue('--app-font-scale')).toBe('1.125')
+    expect(
+      document.documentElement.style.getPropertyValue('--app-font-scale')
+    ).toBe('1.125')
     expect(document.documentElement.style.zoom).toBe('1.125')
     expect(document.documentElement.style.fontSize).toBe('')
-    expect(document.documentElement.style.getPropertyValue('--canvas')).toBe('#c6c6c6')
-    expect(document.documentElement.style.getPropertyValue('--content')).toBe('#ffffff')
-    expect(document.documentElement.style.getPropertyValue('--text')).toBe('#000000')
+    expect(document.documentElement.style.getPropertyValue('--canvas')).toBe(
+      '#c6c6c6'
+    )
+    expect(document.documentElement.style.getPropertyValue('--content')).toBe(
+      '#ffffff'
+    )
+    expect(document.documentElement.style.getPropertyValue('--text')).toBe(
+      '#000000'
+    )
     expect(document.documentElement.style.color).toBe('var(--text)')
     expect(document.documentElement.style.backgroundColor).toBe('var(--canvas)')
 
@@ -36,12 +44,14 @@ describe('applyDocumentPreferences', () => {
     applyDocumentPreferences(
       { language: 'en', fontSize: 'small', theme: 'dark' },
       { navigator: { language: 'en-US' } },
-      document,
+      document
     )
 
     expect(document.documentElement.lang).toBe('en')
     expect(document.documentElement.dataset.theme).toBe('mac')
-    expect(document.documentElement.style.getPropertyValue('--app-font-scale')).toBe('.875')
+    expect(
+      document.documentElement.style.getPropertyValue('--app-font-scale')
+    ).toBe('.875')
     expect(document.documentElement.style.zoom).toBe('0.875')
   })
 })

@@ -13,10 +13,13 @@ The Rust backend is under `src-tauri/src/`. Keep IPC handlers in `commands/`, mo
 - `make check`: run TypeScript checks plus Rust `check` and Clippy.
 - `make test`: run Vitest, type checking, `cargo fmt --check`, Clippy with warnings denied, and Rust tests.
 - `make build`: build the frontend and Rust binary.
+- `make format`: format TypeScript (Prettier) and Rust (`cargo fmt`).
 - `npx vitest run src/App.spec.ts`: run one frontend spec.
 - `cargo test --manifest-path src-tauri/Cargo.toml <name>`: run selected Rust tests.
 
 Use Node.js 22+, stable Rust, Xcode Command Line Tools, and Tauri CLI 2.
+
+After finishing development, run `make format` and `make build` before committing.
 
 ## Coding Style & Naming Conventions
 

@@ -8,7 +8,7 @@ APP_BUNDLE := $(TAURI_DIR)/target/release/bundle/macos/Via.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build test check package clean clean-all
+.PHONY: help install dev build format test check package clean clean-all
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -22,6 +22,10 @@ dev: ## Run the Via desktop app in development mode.
 build: ## Build the frontend and compile the Rust desktop binary.
 	$(NPM) run build
 	$(CARGO) build --manifest-path $(TAURI_DIR)/Cargo.toml
+
+format: ## Format TypeScript (Prettier) and Rust (cargo fmt) source code.
+	$(NPM) run format
+	$(CARGO) fmt --manifest-path $(TAURI_DIR)/Cargo.toml
 
 test: ## Run all frontend and Rust tests.
 	$(NPM) run test

@@ -45,10 +45,20 @@ describe('i18n', () => {
     const english = createI18n('en')
     const chinese = createI18n('zh-CN')
 
-    expect(english.t('message.deleteGroupScope', { sessions: 2, rules: 3 })).toBe('This will delete 2 sessions and 3 forwarding rules in this group. This cannot be undone.')
-    expect(chinese.t('message.deleteGroupScope', { sessions: 2, rules: 3 })).toBe('将删除此分组下的 2 个会话和 3 条转发规则，此操作不可撤销。')
-    expect(english.t('status.tunnels', { active: 4, errors: 1 })).toBe('Tunnels: 4 running / 1 issues')
-    expect(chinese.t('status.tunnels', { active: 4, errors: 1 })).toBe('隧道：4 运行中 / 1 异常')
+    expect(
+      english.t('message.deleteGroupScope', { sessions: 2, rules: 3 })
+    ).toBe(
+      'This will delete 2 sessions and 3 forwarding rules in this group. This cannot be undone.'
+    )
+    expect(
+      chinese.t('message.deleteGroupScope', { sessions: 2, rules: 3 })
+    ).toBe('将删除此分组下的 2 个会话和 3 条转发规则，此操作不可撤销。')
+    expect(english.t('status.tunnels', { active: 4, errors: 1 })).toBe(
+      'Tunnels: 4 running / 1 issues'
+    )
+    expect(chinese.t('status.tunnels', { active: 4, errors: 1 })).toBe(
+      '隧道：4 运行中 / 1 异常'
+    )
     expect(chinese.t('status.backendReady')).toBe('Rust 后端：SQLite 本地模式')
   })
 
@@ -56,19 +66,27 @@ describe('i18n', () => {
     for (const key of translationKeys) {
       expect(catalogs.en[key]).toEqual(expect.any(String))
       expect(catalogs['zh-CN'][key]).toEqual(expect.any(String))
-      expect(catalogs.en[key].match(/\{[^}]+\}/g)?.sort()).toEqual(catalogs['zh-CN'][key].match(/\{[^}]+\}/g)?.sort())
+      expect(catalogs.en[key].match(/\{[^}]+\}/g)?.sort()).toEqual(
+        catalogs['zh-CN'][key].match(/\{[^}]+\}/g)?.sort()
+      )
     }
   })
 
   it('includes current table and accessible-label copy in the typed catalog', () => {
-    expect(translationKeys).toEqual(expect.arrayContaining([
-      'table.status',
-      'table.toggle',
-      'table.actions',
-      'aria.deleteGroup',
-    ]))
-    expect(createI18n('en').t('aria.deleteGroup', { name: 'Production' })).toBe('Delete group Production')
-    expect(createI18n('zh-CN').t('aria.deleteGroup', { name: '生产环境' })).toBe('删除分组 生产环境')
+    expect(translationKeys).toEqual(
+      expect.arrayContaining([
+        'table.status',
+        'table.toggle',
+        'table.actions',
+        'aria.deleteGroup',
+      ])
+    )
+    expect(createI18n('en').t('aria.deleteGroup', { name: 'Production' })).toBe(
+      'Delete group Production'
+    )
+    expect(
+      createI18n('zh-CN').t('aria.deleteGroup', { name: '生产环境' })
+    ).toBe('删除分组 生产环境')
   })
 
   it('uses exact catalog entries for create and recovery-code controls', () => {
@@ -81,7 +99,9 @@ describe('i18n', () => {
     expect(chinese.t('action.createGroup')).toBe('创建分组')
     expect(english.t('dialog.createSession.title')).toBe('Create session')
     expect(chinese.t('action.createSession')).toBe('创建会话')
-    expect(english.t('aria.recoveryCodesAcknowledged')).toBe('I saved the recovery codes')
+    expect(english.t('aria.recoveryCodesAcknowledged')).toBe(
+      'I saved the recovery codes'
+    )
     expect(chinese.t('aria.recoveryCodesAcknowledged')).toBe('我已保存恢复码')
     expect(english.t('action.newSshSession')).toBe('New SSH session')
     expect(chinese.t('action.newSshSession')).toBe('新建 SSH 会话')

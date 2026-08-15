@@ -10,13 +10,44 @@ const { t } = injectI18n()
     <div class="empty-icon" aria-hidden="true">⇄</div>
     <h1>{{ t('empty.title') }}</h1>
     <p>{{ t('empty.description') }}</p>
-    <button class="primary-button" type="button" @click="emit('create')"><span aria-hidden="true">＋</span> {{ t('action.newSshSession') }}</button>
+    <button class="primary-button" type="button" @click="emit('create')">
+      <span aria-hidden="true">＋</span> {{ t('action.newSshSession') }}
+    </button>
   </section>
 </template>
 
 <style scoped>
-.empty-workspace { display: grid; flex: 1; place-content: center; justify-items: center; gap: 10px; padding: 48px; text-align: center; }
-.empty-icon { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 25px; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised); }
-h1 { margin: 6px 0 0; font-size: 18px; font-family: var(--font-ui); }
-p { max-width: 390px; margin: 0 0 8px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.empty-workspace {
+  display: grid;
+  flex: 1;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 48px;
+  text-align: center;
+}
+.empty-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 25px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
+}
+h1 {
+  margin: 6px 0 0;
+  font-size: 18px;
+  font-family: var(--font-ui);
+}
+p {
+  max-width: 390px;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
 </style>

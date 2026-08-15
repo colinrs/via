@@ -17,9 +17,12 @@ const newPassword = ref('')
 const confirmation = ref('')
 const { t } = injectI18n()
 const canUnlock = computed(() => password.value.trim().length > 0)
-const canRecover = computed(() => recoveryCode.value.trim().length > 0
-  && newPassword.value.trim().length > 0
-  && newPassword.value === confirmation.value)
+const canRecover = computed(
+  () =>
+    recoveryCode.value.trim().length > 0 &&
+    newPassword.value.trim().length > 0 &&
+    newPassword.value === confirmation.value
+)
 
 function clearSecrets() {
   password.value = ''
@@ -52,26 +55,65 @@ function close() {
   mode.value = 'unlock'
 }
 
-watch(() => props.open, () => {
-  clearSecrets()
-  mode.value = 'unlock'
-})
+watch(
+  () => props.open,
+  () => {
+    clearSecrets()
+    mode.value = 'unlock'
+  }
+)
 </script>
 
 <template>
-  <div v-if="open" class="backdrop" role="dialog" aria-modal="true" :aria-label="mode === 'unlock' ? t('dialog.unlock.title') : t('dialog.recover.title')">
+  <div
+    v-if="open"
+    class="backdrop"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="
+      mode === 'unlock' ? t('dialog.unlock.title') : t('dialog.recover.title')
+    "
+  >
     <section class="dialog">
       <template v-if="mode === 'unlock'">
         <h2>{{ t('dialog.unlock.title') }}</h2>
         <p>{{ t('dialog.unlock.description') }}</p>
         <label>
           {{ t('field.appMasterPassword') }}
-          <input v-model="password" type="password" autocomplete="current-password" :aria-label="t('field.appMasterPassword')" autofocus @keyup.enter="submitUnlock">
+          <input
+            v-model="password"
+            type="password"
+            autocomplete="current-password"
+            :aria-label="t('field.appMasterPassword')"
+            autofocus
+            @keyup.enter="submitUnlock"
+          />
         </label>
-        <button data-testid="show-recovery" class="link" type="button" @click="selectMode('recovery')">{{ t('action.useRecoveryCode') }}</button>
+        <button
+          data-testid="show-recovery"
+          class="link"
+          type="button"
+          @click="selectMode('recovery')"
+        >
+          {{ t('action.useRecoveryCode') }}
+        </button>
         <footer>
-          <button data-testid="close-secret-unlock" type="button" @click="close">{{ t('common.cancel') }}</button>
-          <button data-testid="unlock-secrets-action" class="primary" type="button" :disabled="!canUnlock" @click="submitUnlock">{{ t('action.unlock') }}</button>
+          <button
+            data-testid="close-secret-unlock"
+            type="button"
+            @click="close"
+          >
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            data-testid="unlock-secrets-action"
+            class="primary"
+            type="button"
+            :disabled="!canUnlock"
+            @click="submitUnlock"
+          >
+            {{ t('action.unlock') }}
+          </button>
         </footer>
       </template>
       <template v-else>
@@ -79,20 +121,57 @@ watch(() => props.open, () => {
         <p>{{ t('dialog.recover.description') }}</p>
         <label>
           {{ t('field.recoveryCode') }}
-          <input v-model="recoveryCode" autocomplete="one-time-code" :aria-label="t('field.recoveryCode')" autofocus>
+          <input
+            v-model="recoveryCode"
+            autocomplete="one-time-code"
+            :aria-label="t('field.recoveryCode')"
+            autofocus
+          />
         </label>
         <label>
           {{ t('field.newMasterPassword') }}
-          <input v-model="newPassword" type="password" autocomplete="new-password" :aria-label="t('field.newMasterPassword')">
+          <input
+            v-model="newPassword"
+            type="password"
+            autocomplete="new-password"
+            :aria-label="t('field.newMasterPassword')"
+          />
         </label>
         <label>
           {{ t('field.confirmNewMasterPassword') }}
-          <input v-model="confirmation" type="password" autocomplete="new-password" :aria-label="t('field.confirmNewMasterPassword')" @keyup.enter="submitRecovery">
+          <input
+            v-model="confirmation"
+            type="password"
+            autocomplete="new-password"
+            :aria-label="t('field.confirmNewMasterPassword')"
+            @keyup.enter="submitRecovery"
+          />
         </label>
-        <button data-testid="show-unlock" class="link" type="button" @click="selectMode('unlock')">{{ t('action.backToUnlock') }}</button>
+        <button
+          data-testid="show-unlock"
+          class="link"
+          type="button"
+          @click="selectMode('unlock')"
+        >
+          {{ t('action.backToUnlock') }}
+        </button>
         <footer>
-          <button data-testid="close-secret-unlock" type="button" @click="close">{{ t('common.cancel') }}</button>
-          <button data-testid="recover-secrets-action" class="primary" type="button" :disabled="!canRecover" @click="submitRecovery">{{ t('action.recoverAndReset') }}</button>
+          <button
+            data-testid="close-secret-unlock"
+            type="button"
+            @click="close"
+          >
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            data-testid="recover-secrets-action"
+            class="primary"
+            type="button"
+            :disabled="!canRecover"
+            @click="submitRecovery"
+          >
+            {{ t('action.recoverAndReset') }}
+          </button>
         </footer>
       </template>
     </section>
@@ -100,18 +179,86 @@ watch(() => props.open, () => {
 </template>
 
 <style scoped>
-.backdrop { position: fixed; inset: 0; display: grid; place-items: center; background: #0008; z-index: 20; }
-.dialog { width: min(410px, calc(100vw - 32px)); border: 1px solid var(--line); background: var(--content); padding: 20px; border-radius: var(--radius-lg); box-shadow: var(--shadow-drop); }
-.dialog h2 { margin: 0; font-size: 16px; font-family: var(--font-ui); }
-.dialog p { margin: 12px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
-footer { display: flex; justify-content: flex-end; gap: 8px; }
-button { border: 1px solid var(--line); background: var(--surface-raised); padding: 7px 10px; color: var(--text); cursor: pointer; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised); }
-button:active { box-shadow: var(--shadow-raised-active); }
-button:disabled { cursor: wait; opacity: .6; }
-.danger { border: 2px solid var(--line); }
-.dialog label { display: grid; gap: 6px; margin-top: 12px; color: var(--muted); font-size: 12px; }
-.dialog input { border: 1px solid var(--line); background: var(--content); padding: 8px; color: var(--text); border-radius: var(--radius-sm); box-shadow: var(--shadow-inset); }
-footer { margin-top: 16px; }
-.primary { border-width: 2px; font-weight: 700; }
-.link { border: 0; background: transparent; margin-top: 12px; padding-inline: 0; color: var(--text); text-decoration: underline; box-shadow: none; }
+.backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #0008;
+  z-index: 20;
+}
+.dialog {
+  width: min(410px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  background: var(--content);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-drop);
+}
+.dialog h2 {
+  margin: 0;
+  font-size: 16px;
+  font-family: var(--font-ui);
+}
+.dialog p {
+  margin: 12px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+button {
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  padding: 7px 10px;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
+}
+button:active {
+  box-shadow: var(--shadow-raised-active);
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.danger {
+  border: 2px solid var(--line);
+}
+.dialog label {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dialog input {
+  border: 1px solid var(--line);
+  background: var(--content);
+  padding: 8px;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-inset);
+}
+footer {
+  margin-top: 16px;
+}
+.primary {
+  border-width: 2px;
+  font-weight: 700;
+}
+.link {
+  border: 0;
+  background: transparent;
+  margin-top: 12px;
+  padding-inline: 0;
+  color: var(--text);
+  text-decoration: underline;
+  box-shadow: none;
+}
 </style>

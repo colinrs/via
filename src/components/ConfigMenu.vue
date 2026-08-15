@@ -15,8 +15,12 @@ const { t } = injectI18n()
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 
-function toggle() { open.value = !open.value }
-function close() { open.value = false }
+function toggle() {
+  open.value = !open.value
+}
+function close() {
+  open.value = false
+}
 function choose(action: Action) {
   switch (action) {
     case 'import':
@@ -36,7 +40,8 @@ function choose(action: Action) {
 }
 
 function onDocumentClick(event: MouseEvent) {
-  if (open.value && root.value && !root.value.contains(event.target as Node)) close()
+  if (open.value && root.value && !root.value.contains(event.target as Node))
+    close()
 }
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') close()
@@ -54,20 +59,98 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="root" class="config-menu">
-    <button type="button" data-testid="config-button" class="config-button" :aria-label="t('action.configMenu')" :aria-expanded="open" @click="toggle">⚙</button>
+    <button
+      type="button"
+      data-testid="config-button"
+      class="config-button"
+      :aria-label="t('action.configMenu')"
+      :aria-expanded="open"
+      @click="toggle"
+    >
+      ⚙
+    </button>
     <div v-if="open" data-testid="config-menu" class="menu" role="menu">
-      <button type="button" role="menuitem" data-testid="config-import" @click="choose('import')">{{ t('action.importConfig') }}</button>
-      <button type="button" role="menuitem" data-testid="config-export" @click="choose('export')">{{ t('action.exportConfig') }}</button>
-      <button type="button" role="menuitem" data-testid="config-unlock" @click="choose('unlock')">{{ t('action.unlockCredentials') }}</button>
-      <button type="button" role="menuitem" data-testid="config-settings" @click="choose('settings')">{{ t('app.settings') }}</button>
+      <button
+        type="button"
+        role="menuitem"
+        data-testid="config-import"
+        @click="choose('import')"
+      >
+        {{ t('action.importConfig') }}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-testid="config-export"
+        @click="choose('export')"
+      >
+        {{ t('action.exportConfig') }}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-testid="config-unlock"
+        @click="choose('unlock')"
+      >
+        {{ t('action.unlockCredentials') }}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-testid="config-settings"
+        @click="choose('settings')"
+      >
+        {{ t('app.settings') }}
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.config-menu { position: relative; display: inline-flex; }
-.config-button { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--line); background: var(--surface-raised); color: var(--text); font-size: 14px; cursor: pointer; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised); }
-.menu { position: absolute; bottom: 34px; left: 0; z-index: 90; display: flex; min-width: 190px; flex-direction: column; border: 1px solid var(--line); background: var(--surface-raised); padding: 5px; border-radius: var(--radius-md); box-shadow: var(--shadow-drop); }
-.menu button { border: 0; padding: 8px 10px; background: transparent; color: var(--text); text-align: left; font: inherit; font-size: 12px; cursor: pointer; box-shadow: none; }
-.menu button:hover { background: #000000; color: #ffffff; }
+.config-menu {
+  position: relative;
+  display: inline-flex;
+}
+.config-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
+}
+.menu {
+  position: absolute;
+  bottom: 34px;
+  left: 0;
+  z-index: 90;
+  display: flex;
+  min-width: 190px;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  padding: 5px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-drop);
+}
+.menu button {
+  border: 0;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: none;
+}
+.menu button:hover {
+  background: #000000;
+  color: #ffffff;
+}
 </style>

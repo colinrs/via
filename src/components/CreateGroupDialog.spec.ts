@@ -6,7 +6,10 @@ import { withChineseI18n } from '../test/i18n'
 
 describe('CreateGroupDialog', () => {
   it('requires a non-blank name and emits the normalized name', async () => {
-    const wrapper = mount(CreateGroupDialog, { ...withChineseI18n(), props: { open: true } })
+    const wrapper = mount(CreateGroupDialog, {
+      ...withChineseI18n(),
+      props: { open: true },
+    })
     const action = wrapper.get('[data-testid="create-group-action"]')
     expect((action.element as HTMLButtonElement).disabled).toBe(true)
 

@@ -386,6 +386,8 @@ describe('ViaStore', () => {
       { rules: [{ ruleId: 'rule-a', state: 'dynamic', message: null }] },
       { rules: [{ ruleId: 'rule-a', state: 'active', message: 42 }] },
       { rules: [], connectedSessionIds: 'not-an-array' },
+      { rules: [], connectedSessionIds: [123] },
+      { rules: [], connectedSessionIds: ['session-a', null] },
     ]
     for (const payload of invalidPayloads) {
       const { store, fire } = await storeWithRuntimeHandler([

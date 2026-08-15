@@ -51,8 +51,8 @@ function parseRuntimeSnapshot(value: unknown): RuntimeSnapshot | null {
     })
   }
   const connected = record.connectedSessionIds
-  if (connected !== undefined && !Array.isArray(connected)) return null
-  const connectedSessionIds = (connected ?? []).filter((id): id is string => typeof id === 'string')
+  if (connected !== undefined && (!Array.isArray(connected) || connected.some((id) => typeof id !== 'string'))) return null
+  const connectedSessionIds = (connected ?? []) as string[]
   return { rules, connectedSessionIds }
 }
 

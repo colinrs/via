@@ -1728,6 +1728,31 @@ describe('App', () => {
     expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('断开连接失败，请重试。')
   })
 
+  it('shows a success toast after connecting and starting tunnels', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    })
+    await wrapper.findAll('button').find((button) => button.text() === '连接并启动')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('连接并启动隧道成功')
+  })
+
+  it('shows a success toast after disconnecting a connected session', async () => {
+    const wrapper = await mountAppWithConfig({
+      groups: [{ id: 'group-a', name: '分组 A' }],
+      sessions: [session('session-a', 'group-a')],
+      rules: [],
+    })
+    const runtimeListener = listen.mock.calls.at(-1)![1]
+    runtimeListener({ payload: { rules: [], connectedSessionIds: ['session-a'] } })
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('button').find((button) => button.text() === '断开连接')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain('已断开连接')
+  })
+
   it('rebuilds the connection when reconnect tunnels is pressed', async () => {
     const wrapper = await mountAppWithConfig({
       groups: [{ id: 'group-a', name: '分组 A' }],

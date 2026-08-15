@@ -285,6 +285,7 @@ async function saveAuthentication() {
     }
     await store.saveSessionSecret(sessionId, secret)
     if (selectedSessionId.value === sessionId && selectedSession.value?.auth.kind === authKind && draft.value === secret) draft.value = ''
+    notifySuccess('success.authenticationSaved')
   } catch {
     notifyError('error.saveAuthenticationCredentials')
   } finally {
@@ -310,6 +311,7 @@ async function removeRule() {
     const index = store.rules.findIndex((item) => item.id === id)
     if (index >= 0) store.rules.splice(index, 1)
     pendingRuleId.value = null
+    notifySuccess('success.ruleDeleted')
   } catch {
     await store.reloadConfig().catch(() => undefined)
     if (!store.rules.some((item) => item.id === id)) pendingRuleId.value = null
@@ -331,6 +333,7 @@ async function connect() {
   try {
     await store.connectSession(selectedSessionId.value)
     await store.startEnabledRules(selectedSessionId.value)
+    notifySuccess('success.connected')
   } catch (error) {
     applyConnectFailure(error)
   } finally {
@@ -342,6 +345,7 @@ async function disconnect() {
   sessionBusy.value = 'disconnect'
   try {
     await store.disconnectSession(selectedSessionId.value)
+    notifySuccess('success.disconnected')
   } catch {
     notifyError('error.disconnect')
   } finally {
@@ -355,6 +359,7 @@ async function reconnect() {
     await store.disconnectSession(selectedSessionId.value)
     await store.connectSession(selectedSessionId.value)
     await store.startEnabledRules(selectedSessionId.value)
+    notifySuccess('success.reconnected')
   } catch (error) {
     applyConnectFailure(error)
   } finally {
@@ -366,6 +371,7 @@ async function startAll() {
   bulkRulesBusy.value = true
   try {
     await store.startEnabledRules(selectedSessionId.value)
+    notifySuccess('success.rulesStarted')
   } catch {
     notifyError('error.ruleOperation')
   } finally {
@@ -377,6 +383,7 @@ async function stopAll() {
   bulkRulesBusy.value = true
   try {
     await store.stopSessionRules(selectedSessionId.value)
+    notifySuccess('success.rulesStopped')
   } catch {
     notifyError('error.ruleOperation')
   } finally {
@@ -461,10 +468,18 @@ function warnBeforeClosingWithCodes(event: BeforeUnloadEvent) {
   event.returnValue = ''
 }
 async function openTransfer(mode: 'import' | 'export') { try { exportedJson.value = mode === 'export' ? await store.exportConfig() : ''; importMode.value = mode } catch { notifyError('error.readConfig') } }
-async function transfer(json: string, replaceAll: boolean) { try { if (importMode.value === 'export') await navigator.clipboard.writeText(json); else { await store.importConfig(json, replaceAll); selectedSessionId.value = store.sessions[0]?.id ?? null }; importMode.value = null } catch { notifyError('error.processConfig') } }
+async function transfer(json: string, replaceAll: boolean) {
+  const mode = importMode.value
+  try {
+    if (mode === 'export') await navigator.clipboard.writeText(json)
+    else { await store.importConfig(json, replaceAll); selectedSessionId.value = store.sessions[0]?.id ?? null }
+    importMode.value = null
+    notifySuccess(mode === 'export' ? 'success.exported' : 'success.imported')
+  } catch { notifyError('error.processConfig') }
+}
 function requestCreateSession() { if (store.groups.length) createSessionOpen.value = true; else void addSession() }
-async function addSession(groupId?: string) { const group = store.groups.find((item) => item.id === groupId) ?? store.groups[0] ?? { id: crypto.randomUUID(), name: t('message.defaultGroup') }; if (!store.groups.length) store.groups.push(group); const id = crypto.randomUUID(); store.sessions.push({ id, groupId: group.id, name: t('message.unnamedSession'), host: 'localhost', port: 22, user: 'root', auth: { kind: 'password', secretId: null } }); selectedSessionId.value = id; createSessionOpen.value = false; await persist() }
-async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); notifyError('error.createGroup') } }
+async function addSession(groupId?: string) { const group = store.groups.find((item) => item.id === groupId) ?? store.groups[0] ?? { id: crypto.randomUUID(), name: t('message.defaultGroup') }; if (!store.groups.length) store.groups.push(group); const id = crypto.randomUUID(); store.sessions.push({ id, groupId: group.id, name: t('message.unnamedSession'), host: 'localhost', port: 22, user: 'root', auth: { kind: 'password', secretId: null } }); selectedSessionId.value = id; createSessionOpen.value = false; if (await persist()) notifySuccess('success.sessionCreated') }
+async function createGroup(name: string) { const group = { id: crypto.randomUUID(), name }; store.groups.push(group); try { await store.createGroup(group); createGroupOpen.value = false; notifySuccess('success.groupCreated') } catch { store.groups.splice(store.groups.findIndex((item) => item.id === group.id), 1); notifyError('error.createGroup') } }
 function groupDeletionSignature(id: string): GroupDeletionScope {
   const sessionIds = store.sessions
     .filter((session) => session.groupId === id)
@@ -526,6 +541,7 @@ async function removeGroup(generation: number) {
     if (groupIndex >= 0) store.groups.splice(groupIndex, 1)
     selectedSessionId.value = store.sessions[0]?.id ?? null
     pendingGroupDeletion.value = null
+    notifySuccess('success.groupDeleted')
   } catch {
     await store.reloadConfig().catch(() => undefined)
     if (!store.groups.some((group) => group.id === pending.id)) pendingGroupDeletion.value = null
@@ -553,6 +569,7 @@ async function removeSession() {
     if (index >= 0) store.sessions.splice(index, 1)
     selectedSessionId.value = store.sessions[0]?.id ?? null
     deleteSessionOpen.value = false
+    notifySuccess('success.sessionDeleted')
   } catch {
     store.sessions.splice(0, store.sessions.length, ...previousSessions)
     store.rules.splice(0, store.rules.length, ...previousRules)

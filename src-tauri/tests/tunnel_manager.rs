@@ -209,8 +209,12 @@ async fn snapshot_orders_connected_session_ids() {
     let manager = TunnelManager::new();
     let greater = uuid::Uuid::from_u128(2);
     let lesser = uuid::Uuid::from_u128(1);
-    manager.register_session(greater, Arc::new(EchoSession)).await;
-    manager.register_session(lesser, Arc::new(EchoSession)).await;
+    manager
+        .register_session(greater, Arc::new(EchoSession))
+        .await;
+    manager
+        .register_session(lesser, Arc::new(EchoSession))
+        .await;
 
     let snapshot = manager.snapshot().await;
 

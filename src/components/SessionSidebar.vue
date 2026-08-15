@@ -102,7 +102,9 @@ const emit = defineEmits<{
 
 <style scoped>
 .sidebar { display: flex; width: 248px; flex: 0 0 248px; flex-direction: column; border-right: 1px solid var(--line); background: var(--canvas); }
-.create-session { margin: 14px 14px 7px; }.create-group{margin:0 14px 7px;border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;text-align:left;cursor:pointer}.create-group:hover{color:var(--text)}
+.create-session { margin: 14px 14px 7px; }
+.create-group { margin: 0 14px 7px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.create-group:hover { color: var(--text); }
 .session-navigation { overflow: auto; padding: 4px 10px 16px; }
 .session-group { margin: 13px 0 20px; }
 .group-heading-row { display: flex; align-items: center; }
@@ -110,14 +112,18 @@ const emit = defineEmits<{
 .group-heading::before { content: '›'; display: inline-block; margin-right: 6px; transition: transform 160ms ease; }
 .group-heading[aria-expanded='true']::before { transform: rotate(90deg); }
 .group-name { display: flex; gap: 6px; align-items: center; }
-.count { min-width: 18px; border-radius: 20px; background: var(--surface-raised); padding: 1px 6px; text-align: center; font-size: 10px; }
+.count { min-width: 18px; background: var(--surface); border: 1px solid var(--line); padding: 1px 6px; text-align: center; font-size: 10px; }
 .delete-group { border: 0; padding: 0 7px 6px 3px; color: var(--muted); background: transparent; font: inherit; font-size: 15px; cursor: pointer; }
 .delete-group:hover { color: var(--red); }
 .tree-children { position: relative; margin-left: 12px; padding-left: 10px; }
-.tree-children::before { position: absolute; top: 0; bottom: 8px; left: 0; width: 1px; background: var(--line); content: ''; }
-.session-item { display: grid; width: 100%; grid-template-columns: 16px 1fr 8px; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 8px; color: var(--muted); background: transparent; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
+.tree-children::before { position: absolute; top: 0; bottom: 8px; left: 0; width: 1px; background: #808080; content: ''; }
+.session-item { display: grid; width: 100%; grid-template-columns: 16px 1fr 8px; align-items: center; gap: 8px; border: 1px solid transparent; padding: 8px; color: var(--muted); background: transparent; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
 .session-item:hover { background: var(--surface); color: var(--text); }
-.session-item.selected { border-color: rgb(56 139 253 / 45%); background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-soft); }
-.server-icon { color: var(--blue); }.session-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-indicator { width: 7px; height: 7px; border-radius: 50%; background: #484f58; }.session-indicator.active { background: var(--green); box-shadow: 0 0 7px var(--green); }.session-indicator.failed { background: var(--red); }.session-indicator.stopped { background: #484f58; }
+.session-item.selected { background: #000000; color: #ffffff; }
+.server-icon { color: var(--text); }
+.session-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-indicator { width: 7px; height: 7px; background: var(--muted); }
+.session-indicator.active { background: var(--green); }
+.session-indicator.failed { background: var(--red); }
+.session-indicator.stopped { background: var(--muted); }
 </style>

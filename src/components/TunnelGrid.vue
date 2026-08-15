@@ -84,11 +84,11 @@ const stopAllHint = computed(() => props.bulkBusy ? t('hint.operationInProgress'
 .grid-section { display: flex; min-height: 0; flex: 1; flex-direction: column; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); padding: 12px 18px; }
 .toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.search { display: flex; width: min(310px, 100%); align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--content); padding: 0 9px; color: var(--muted); box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #ffffff; }
+.search { display: flex; width: min(310px, 100%); align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--content); padding: 0 9px; color: var(--muted); border-radius: var(--radius-sm); box-shadow: var(--shadow-inset); }
 .search input { border: 0; padding: 7px 0; color: var(--text); background: transparent; }
 
 .table-scroll { min-height: 0; overflow: auto; padding: 18px; }
-table { width: 100%; min-width: 830px; border: 1px solid var(--line); border-spacing: 0; background: var(--content); }
+table { width: 100%; min-width: 830px; border: 1px solid var(--line); border-spacing: 0; background: var(--content); border-radius: var(--radius-md); overflow: hidden; }
 th { border-bottom: 1px solid var(--line); padding: 11px 12px; color: var(--text); background: var(--surface); text-align: left; font-family: var(--font-ui); font-size: 11px; font-weight: 700; }
 td { height: 46px; border-bottom: 1px solid #c0c0c0; padding: 8px 10px; font-family: var(--font-mono); font-size: 12px; }
 tr:last-child td { border-bottom: 0; }
@@ -96,21 +96,21 @@ tr:hover { background: #ececec; }
 tr.conflict { background: rgb(179 38 30 / 8%); }
 .center { text-align: center; }
 
-.state { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); padding: 2px 6px; color: var(--text); background: var(--surface); font-family: var(--font-ui); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; box-shadow: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #404040; }
-.state i { width: 7px; height: 7px; background: var(--muted); }
+.state { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); padding: 2px 6px; color: var(--text); background: var(--surface); font-family: var(--font-ui); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised); }
+.state i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .state-active i { background: var(--green); }
 .state-conflict i, .state-failed i { background: var(--red); }
 .state-stopped i { background: var(--muted); }
 .state-starting i, .state-reconnecting i { background: var(--yellow); }
 
-input { width: 100%; border: 1px solid transparent; outline: 0; background: transparent; padding: 5px 6px; color: var(--text); font: inherit; font-size: 12px; font-family: var(--font-mono); }
+input { width: 100%; border: 1px solid transparent; outline: 0; background: transparent; padding: 5px 6px; color: var(--text); font: inherit; font-size: 12px; font-family: var(--font-mono); border-radius: var(--radius-sm); }
 input:hover { border-color: #c0c0c0; }
-input:focus { border-color: var(--line); background: var(--content); box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #ffffff; }
+input:focus { border-color: var(--line); background: var(--content); border-radius: var(--radius-sm); box-shadow: var(--shadow-inset); }
 .port-input { width: 80px; }
 
 .switch { position: relative; display: inline-block; width: 16px; height: 16px; }
 .switch input { position: absolute; opacity: 0; }
-.switch span { display: block; width: 100%; height: 100%; background: var(--content); border: 1px solid var(--line); cursor: pointer; box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #ffffff; }
+.switch span { display: block; width: 100%; height: 100%; background: var(--content); border: 1px solid var(--line); cursor: pointer; border-radius: var(--radius-sm); box-shadow: var(--shadow-inset); }
 .switch input:checked + span::after { content: '✓'; position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-ui); font-size: 11px; font-weight: 700; color: var(--text); }
 
 .row-actions { white-space: nowrap; }

@@ -16,7 +16,7 @@ const { t } = injectI18n()
 
 <style scoped>
 .toast-stack { position: fixed; top: 14px; left: 50%; z-index: 100; display: flex; flex-direction: column; align-items: center; gap: 8px; transform: translateX(-50%); pointer-events: none; }
-.toast { display: flex; align-items: center; gap: 8px; max-width: 520px; border: 1px solid var(--line); background: var(--content); padding: 9px 14px; color: var(--text); font-size: 12px; box-shadow: 3px 3px 0 rgb(0 0 0 / 25%); }
+.toast { display: flex; align-items: center; gap: 8px; max-width: 520px; border: 1px solid var(--line); background: var(--content); padding: 9px 14px; color: var(--text); font-size: 12px; border-radius: var(--radius-md); box-shadow: var(--shadow-drop); }
 .toast::before { content: ''; width: 8px; height: 8px; background: var(--muted); }
 .toast-error { color: var(--text); }
 .toast-error::before { background: var(--red); }

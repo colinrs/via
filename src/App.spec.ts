@@ -367,7 +367,6 @@ describe('App', () => {
   it('renders the tunnel management workspace after startup confirms a configured vault', async () => {
     const wrapper = await mountAppWithSecretStatus({ configured: true })
 
-    expect(wrapper.get('[data-testid="via-app"]').text()).toContain('Via')
     expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="empty-workspace"]')).toBeTruthy()
     expect(wrapper.text()).toContain('还没有 SSH 会话')

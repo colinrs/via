@@ -66,8 +66,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .config-menu { position: relative; display: inline-flex; }
-.config-button { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--line); background: var(--surface-raised); color: var(--text); font-size: 14px; cursor: pointer; box-shadow: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #404040; }
-.menu { position: absolute; bottom: 34px; left: 0; z-index: 90; display: flex; min-width: 190px; flex-direction: column; border: 1px solid var(--line); background: var(--surface-raised); padding: 5px; box-shadow: 4px 4px 0 rgb(0 0 0 / 30%); }
+.config-button { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--line); background: var(--surface-raised); color: var(--text); font-size: 14px; cursor: pointer; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised); }
+.menu { position: absolute; bottom: 34px; left: 0; z-index: 90; display: flex; min-width: 190px; flex-direction: column; border: 1px solid var(--line); background: var(--surface-raised); padding: 5px; border-radius: var(--radius-md); box-shadow: var(--shadow-drop); }
 .menu button { border: 0; padding: 8px 10px; background: transparent; color: var(--text); text-align: left; font: inherit; font-size: 12px; cursor: pointer; box-shadow: none; }
 .menu button:hover { background: #000000; color: #ffffff; }
 </style>

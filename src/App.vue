@@ -621,9 +621,6 @@ onBeforeUnmount(() => {
   <main data-testid="via-app" class="via-app">
     <ToastStack :toasts="toast.toasts" />
     <fieldset data-testid="app-interactions" class="app-interactions" :disabled="authenticationBusy || secretOperationBusy">
-    <header class="titlebar">
-      <div class="brand"><span class="mark">V</span><span>Via</span><span class="version">{{ t('app.mvpVersion') }}</span></div>
-    </header>
     <div v-if="workspaceReady" class="workspace">
       <SessionSidebar :groups="groups" :selected-session-id="selectedSessionId ?? ''" @select="selectedSessionId = $event" @create="requestCreateSession" @create-group="createGroupOpen=true" @delete-group="requestRemoveGroup" />
       <section v-if="selectedSession" class="content">
@@ -692,10 +689,13 @@ onBeforeUnmount(() => {
   --green: #1a7f37;
   --red: #b3261e;
   --yellow: #996600;
-  --radius-sm: 2px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --shadow-soft: none;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / .7), 0 1px 2px rgb(0 0 0 / .2);
+  --shadow-raised-active: inset 1px 1px 3px rgb(0 0 0 / .2);
+  --shadow-inset: inset 1px 1px 2px rgb(0 0 0 / .12);
+  --shadow-drop: 0 6px 16px rgb(0 0 0 / .22);
   --font-ui: "Pixelify Sans", "Geneva", -apple-system, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -706,16 +706,6 @@ button, input, select { font: inherit; }
 .via-app { display: flex; min-height: 100vh; flex-direction: column; background: var(--canvas); }
 .app-interactions { display: flex; min-width: 0; min-height: 100vh; flex: 1; flex-direction: column; margin: 0; border: 0; padding: 0; }
 
-.titlebar {
-  display: flex; height: 48px; align-items: center; justify-content: center;
-  border-bottom: 1px solid var(--line);
-  background: repeating-linear-gradient(0deg, #e6e6e6 0 2px, #b0b0b0 2px 4px);
-  padding: 0 17px;
-}
-.brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-ui); font-size: 14px; font-weight: 700; }
-.mark { display: grid; width: 22px; height: 22px; place-items: center; background: #000000; color: #ffffff; font-size: 12px; }
-.version { border: 1px solid var(--line); padding: 2px 5px; color: var(--text); font-size: 10px; }
-
 button {
   border: 1px solid var(--line);
   background: var(--surface-raised);
@@ -723,9 +713,10 @@ button {
   padding: 7px 10px;
   font-size: 12px;
   cursor: pointer;
-  box-shadow: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #404040;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
 }
-button:active { box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #ffffff; }
+button:active { box-shadow: var(--shadow-raised-active); }
 button:disabled { opacity: .6; cursor: not-allowed; }
 .primary-button { border-width: 2px; font-weight: 700; }
 .secondary-button, .success-button, .danger-button { border: 1px solid var(--line); }
@@ -738,11 +729,11 @@ button:disabled { opacity: .6; cursor: not-allowed; }
 .session-header h1 { margin: 0; font-size: 16px; font-family: var(--font-ui); }
 .connection { display: flex; align-items: center; gap: 6px; margin: 5px 0 0; color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
 .statusbar-left { display: flex; align-items: center; gap: 8px; }
-.backend-dot { display: inline-block; width: 8px; height: 8px; background: var(--green); }
+.backend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
 .backend-dot.backend-connecting { background: var(--yellow); }
 .backend-dot.backend-failed { background: var(--red); }
 .connected { color: var(--green); font-size: 12px; }
-.session-dot { display: inline-block; width: 7px; height: 7px; background: var(--muted); }
+.session-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .session-dot.connected { background: var(--green); }
 .connection-state { margin-left: 8px; color: var(--muted); }
 .connection-state.connected { color: var(--green); }
@@ -754,7 +745,8 @@ button:disabled { opacity: .6; cursor: not-allowed; }
 .editor-fields input, .editor-fields select {
   min-width: 0; border: 1px solid var(--line); outline: 0; background: var(--content);
   padding: 7px 8px; color: var(--text); font-size: 12px; font-family: var(--font-mono);
-  box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #ffffff;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-inset);
 }
 .editor-fields > button { align-self: end; }
 

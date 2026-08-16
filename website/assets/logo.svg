@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="background" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#082b88"/>
+      <stop offset="0.48" stop-color="#063fb7"/>
+      <stop offset="1" stop-color="#0875f5"/>
+    </linearGradient>
+    <radialGradient id="backgroundGlow" cx="0.5" cy="0.46" r="0.72">
+      <stop offset="0" stop-color="#0b53d1" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#032475" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cyanNode" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#08aeb6"/>
+      <stop offset="1" stop-color="#10e0dc"/>
+    </linearGradient>
+    <linearGradient id="orangeNode" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff7900"/>
+      <stop offset="1" stop-color="#ffa600"/>
+    </linearGradient>
+    <linearGradient id="whiteStroke" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#eef3ff"/>
+      <stop offset="0.52" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f8fbff"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#001a58" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="200" fill="url(#background)"/>
+  <rect width="1024" height="1024" rx="200" fill="url(#backgroundGlow)"/>
+
+  <g filter="url(#shadow)">
+    <path d="M220 650L804 374" fill="none" stroke="url(#whiteStroke)" stroke-width="32" stroke-linecap="round"/>
+
+    <circle cx="220" cy="650" r="104" fill="url(#cyanNode)"/>
+    <circle cx="220" cy="650" r="68" fill="url(#whiteStroke)"/>
+    <circle cx="220" cy="650" r="34" fill="url(#cyanNode)"/>
+
+    <circle cx="804" cy="374" r="104" fill="url(#orangeNode)"/>
+    <circle cx="804" cy="374" r="68" fill="url(#whiteStroke)"/>
+    <circle cx="804" cy="374" r="34" fill="url(#orangeNode)"/>
+
+    <circle cx="512" cy="512" r="116" fill="url(#whiteStroke)"/>
+    <circle cx="512" cy="512" r="84" fill="#073cae"/>
+    <path d="M512 469c-17 0-31 14-31 31 0 12 7 23 18 28l-5 47c-1 7 5 13 12 13h12c7 0 13-6 12-13l-5-47c11-5 18-16 18-28 0-17-14-31-31-31Z" fill="url(#whiteStroke)"/>
+  </g>
+</svg>

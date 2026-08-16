@@ -285,6 +285,12 @@
           "markdownDescription": "Enables the save_preferences command without any pre-configured scope."
         },
         {
+          "description": "Enables the save_recovery_codes command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-recovery-codes",
+          "markdownDescription": "Enables the save_recovery_codes command without any pre-configured scope."
+        },
+        {
           "description": "Enables the save_session_secret command without any pre-configured scope.",
           "type": "string",
           "const": "allow-save-session-secret",
@@ -433,6 +439,12 @@
           "type": "string",
           "const": "deny-save-preferences",
           "markdownDescription": "Denies the save_preferences command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_recovery_codes command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-recovery-codes",
+          "markdownDescription": "Denies the save_recovery_codes command without any pre-configured scope."
         },
         {
           "description": "Denies the save_session_secret command without any pre-configured scope.",

@@ -678,6 +678,25 @@ function acknowledgeRecoveryCodes(acknowledged: unknown) {
   recoveryCodes.value = []
   recoveryCodesAcknowledged.value = false
 }
+function recoveryCodesFileName(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const stamp =
+    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+    `_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
+  return `via_recover_code_${stamp}.txt`
+}
+async function downloadRecoveryCodes() {
+  if (recoveryCodes.value.length === 0) return
+  try {
+    const saved = await store.saveRecoveryCodes(
+      recoveryCodesFileName(new Date()),
+      recoveryCodes.value.join('\n')
+    )
+    if (saved) notifySuccess('success.recoveryCodesDownloaded')
+  } catch {
+    notifyError('error.saveRecoveryCodes')
+  }
+}
 function warnBeforeClosingWithCodes(event: BeforeUnloadEvent) {
   if (
     !credentialOperationMayProduceCodes.value &&
@@ -1170,6 +1189,7 @@ onBeforeUnmount(() => {
         :open="recoveryCodes.length > 0"
         :codes="recoveryCodes"
         @acknowledge="acknowledgeRecoveryCodes"
+        @download="downloadRecoveryCodes"
       />
       <HostTrustDialog
         :open="hostTrust !== null"

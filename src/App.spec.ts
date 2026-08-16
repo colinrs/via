@@ -803,6 +803,39 @@ describe('App', () => {
     expect(wrapper.get('[data-testid="session-sidebar"]')).toBeTruthy()
   })
 
+  it('downloads recovery codes to a file and toasts success', async () => {
+    const codes = recoveryCodes('DL')
+    const wrapper = await mountAppWithSecretStatus({
+      configured: true,
+      commandHandlers: {
+        unlock_secrets: async () => codes,
+        save_recovery_codes: async () =>
+          '/Users/me/Downloads/via_recover_code.txt',
+      },
+    })
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-unlock"]').trigger('click')
+    wrapper
+      .getComponent(SecretUnlockDialog)
+      .vm.$emit('unlock', 'master password')
+    await flushPromises()
+
+    await wrapper.getComponent(RecoveryCodesDialog).vm.$emit('download')
+    await flushPromises()
+
+    const call = invoke.mock.calls.find(([c]) => c === 'save_recovery_codes')
+    expect(call).toBeTruthy()
+    expect(call![1]).toEqual({
+      defaultFileName: expect.stringMatching(
+        /^via_recover_code_\d{8}_\d{6}\.txt$/
+      ),
+      content: codes.join('\n'),
+    })
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      '恢复码已保存'
+    )
+  })
+
   it('accepts recovery only after the open unlock dialog enters recovery mode', async () => {
     const wrapper = await mountAppWithSecretStatus({
       configured: true,

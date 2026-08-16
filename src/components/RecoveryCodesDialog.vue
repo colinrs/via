@@ -4,7 +4,11 @@ import { ref, watch } from 'vue'
 import { injectI18n } from '../i18n'
 
 const props = defineProps<{ open: boolean; codes: string[] }>()
-const emit = defineEmits<{ acknowledge: [acknowledged: true]; close: [] }>()
+const emit = defineEmits<{
+  acknowledge: [acknowledged: true]
+  download: []
+  close: []
+}>()
 const acknowledged = ref(false)
 const { t } = injectI18n()
 
@@ -47,6 +51,13 @@ watch(
         {{ t('dialog.recoveryCodes.acknowledge') }}
       </label>
       <footer>
+        <button
+          data-testid="download-recovery-codes"
+          type="button"
+          @click="emit('download')"
+        >
+          {{ t('action.downloadRecoveryCodes') }}
+        </button>
         <button
           data-testid="close-recovery-codes"
           class="primary"

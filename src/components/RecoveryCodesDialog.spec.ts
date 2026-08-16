@@ -57,4 +57,23 @@ describe('RecoveryCodesDialog', () => {
         .checked
     ).toBe(false)
   })
+
+  it('offers a download action independent of the acknowledgement checkbox', async () => {
+    const wrapper = mount(RecoveryCodesDialog, {
+      ...withChineseI18n(),
+      props: { open: true, codes: ['A1-B2'] },
+    })
+
+    const download = wrapper.get('[data-testid="download-recovery-codes"]')
+    expect(download.text()).toContain('下载')
+    expect((download.element as HTMLButtonElement).disabled).toBe(false)
+
+    await download.trigger('click')
+    expect(wrapper.emitted('download')).toHaveLength(1)
+
+    expect(
+      (wrapper.get('[data-testid="close-recovery-codes"]').element as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
+  })
 })

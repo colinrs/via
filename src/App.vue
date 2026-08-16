@@ -283,6 +283,7 @@ async function changeMasterPassword(
   try {
     await store.changeMasterPassword(currentPassword, newPassword)
     masterPasswordChangedToken.value += 1
+    notifySuccess('success.changePassword')
   } catch {
     masterPasswordErrorKey.value = 'settings.changePasswordFailed'
   } finally {

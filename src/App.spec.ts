@@ -422,6 +422,40 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('shows a success toast after changing the master password', async () => {
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'load_config')
+        return { schemaVersion: 1, groups: [], sessions: [], rules: [] }
+      if (command === 'secret_store_status') return { configured: true }
+      if (command === 'load_preferences')
+        return { language: 'en', fontSize: 'medium', theme: 'light' }
+      if (command === 'change_master_password') return null
+      return undefined
+    })
+    listen.mockResolvedValue(() => undefined)
+    const wrapper = mount(App)
+    await flushPromises()
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-settings"]').trigger('click')
+
+    await wrapper
+      .get('input[aria-label="Current master password"]')
+      .setValue('old master')
+    await wrapper
+      .get('input[aria-label="New master password"]')
+      .setValue('new master')
+    await wrapper
+      .get('input[aria-label="Confirm new master password"]')
+      .setValue('new master')
+    await wrapper.get('[data-testid="change-master-password"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="toast-stack"]').text()).toContain(
+      'Master password changed'
+    )
+    wrapper.unmount()
+  })
+
   it('provides one reactive translation instance to app copy and child components', async () => {
     const i18n = createI18n('en')
     invoke.mockImplementation(async (command: string) => {

@@ -307,6 +307,36 @@ describe('ViaStore', () => {
     }
   })
 
+  it('saves recovery codes and returns the chosen path, or null on cancel', async () => {
+    const invoke = vi.fn().mockResolvedValue('/Users/me/via_recover_code.txt')
+    const store = createViaStore({ invoke, listen: vi.fn() } as ViaBridge)
+
+    await expect(
+      store.saveRecoveryCodes('via_recover_code_20260816_143000.txt', 'A1\nA2')
+    ).resolves.toBe('/Users/me/via_recover_code.txt')
+
+    expect(invoke).toHaveBeenCalledWith('save_recovery_codes', {
+      defaultFileName: 'via_recover_code_20260816_143000.txt',
+      content: 'A1\nA2',
+    })
+
+    invoke.mockResolvedValue(null)
+    await expect(store.saveRecoveryCodes('x.txt', 'A1')).resolves.toBeNull()
+  })
+
+  it('rejects malformed save_recovery_codes responses', async () => {
+    for (const response of [undefined, {}, '', 42]) {
+      const store = createViaStore({
+        invoke: vi.fn().mockResolvedValue(response),
+        listen: vi.fn(),
+      } as ViaBridge)
+
+      await expect(
+        store.saveRecoveryCodes('x.txt', 'A1')
+      ).rejects.toThrow('invalid save path')
+    }
+  })
+
   it('starts enabled rules through the selected session command', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined)
     const store = createViaStore({

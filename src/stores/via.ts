@@ -107,6 +107,7 @@ export interface ViaStore {
     recoveryCode: string,
     newMasterPassword: string
   ): Promise<string[]>
+  saveRecoveryCodes(defaultFileName: string, content: string): Promise<string | null>
   saveSessionSecret(sessionId: string, secret: string): Promise<void>
   connectSession(sessionId: string): Promise<void>
   disconnectSession(sessionId: string): Promise<void>
@@ -333,6 +334,16 @@ export function createViaStore(runtime: ViaBridge = bridge): ViaStore {
       )
       state.secretStoreConfigured = true
       return codes
+    },
+    async saveRecoveryCodes(defaultFileName: string, content: string) {
+      const result = await runtime.invoke<unknown>('save_recovery_codes', {
+        defaultFileName,
+        content,
+      })
+      if (result === null) return null
+      if (typeof result !== 'string' || result.length === 0)
+        throw new Error('invalid save path')
+      return result
     },
     async saveSessionSecret(sessionId: string, secret: string) {
       const config = await runtime.invoke<PersistedConfig>(

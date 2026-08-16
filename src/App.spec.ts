@@ -1,15 +1,17 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
-const { invoke, listen, open } = vi.hoisted(() => ({
+const { invoke, listen, open, openUrl } = vi.hoisted(() => ({
   invoke: vi.fn(),
   listen: vi.fn(),
   open: vi.fn(),
+  openUrl: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen }))
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open }))
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl }))
 
 import App from './App.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
@@ -454,6 +456,19 @@ describe('App', () => {
       'Master password changed'
     )
     wrapper.unmount()
+  })
+
+  it('opens the feedback page when the settings feedback button is clicked', async () => {
+    const wrapper = await mountAppWithSecretStatus({ configured: true })
+    await openConfigMenu(wrapper)
+    await wrapper.get('[data-testid="config-settings"]').trigger('click')
+
+    await wrapper.get('[data-testid="open-feedback"]').trigger('click')
+    await flushPromises()
+
+    expect(openUrl).toHaveBeenCalledWith(
+      'https://github.com/colinrs/via/issues/new'
+    )
   })
 
   it('provides one reactive translation instance to app copy and child components', async () => {

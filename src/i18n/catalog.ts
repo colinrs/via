@@ -70,6 +70,7 @@ const en = {
   'action.replaceAll': 'Replace all',
   'action.copyJson': 'Copy JSON',
   'action.iSaved': 'I saved it',
+  'action.feedback': 'Feedback',
   'action.downloadRecoveryCodes': 'Download',
   'action.fillExample': 'Fill example',
   'field.sessionName': 'Session name',
@@ -222,6 +223,7 @@ const en = {
   'error.deleteGroup': 'Could not delete the group. Please try again.',
   'error.deleteSession': 'Could not delete the session. Please try again.',
   'error.disconnect': 'Disconnect failed. Please try again.',
+  'error.openFeedback': 'Could not open the feedback page.',
 } as const
 
 export type TranslationKey = keyof typeof en
@@ -296,6 +298,7 @@ const zhCN: { [Key in TranslationKey]: string } = {
   'action.replaceAll': '覆盖全部',
   'action.copyJson': '复制 JSON',
   'action.iSaved': '我已保存',
+  'action.feedback': '反馈',
   'action.downloadRecoveryCodes': '下载',
   'action.fillExample': '填入示例',
   'field.sessionName': '会话名称',
@@ -435,6 +438,7 @@ const zhCN: { [Key in TranslationKey]: string } = {
   'error.deleteGroup': '删除分组失败，请重试。',
   'error.deleteSession': '删除会话失败，请重试。',
   'error.disconnect': '断开连接失败，请重试。',
+  'error.openFeedback': '无法打开反馈页面。',
 }
 
 export const catalogs = { en, 'zh-CN': zhCN } as const

@@ -29,6 +29,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   updatePreferences: [preferences: AppPreferences]
   changeMasterPassword: [current: string, next: string]
+  feedback: []
   close: []
 }>()
 const t = props.t ?? injectI18n().t
@@ -177,6 +178,13 @@ watch(() => props.masterPasswordChangedToken, clearPasswords)
         <h3>{{ t('settings.about') }}</h3>
         <p>{{ t('settings.localOnly') }}</p>
         <p>{{ t('app.version') }}: {{ t('app.mvpVersion') }}</p>
+        <button
+          data-testid="open-feedback"
+          type="button"
+          @click="emit('feedback')"
+        >
+          {{ t('action.feedback') }}
+        </button>
       </section>
 
       <footer>

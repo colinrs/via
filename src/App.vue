@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import EmptyWorkspace from './components/EmptyWorkspace.vue'
@@ -264,6 +265,14 @@ function closeSettings() {
   settingsOpen.value = false
   preferenceErrorKey.value = null
   masterPasswordErrorKey.value = null
+}
+
+async function openFeedback() {
+  try {
+    await openUrl('https://github.com/colinrs/via/issues/new')
+  } catch {
+    notifyError('error.openFeedback')
+  }
 }
 
 async function changeMasterPassword(
@@ -1252,6 +1261,7 @@ onBeforeUnmount(() => {
         :master-password-changed-token="masterPasswordChangedToken"
         @update-preferences="updatePreferences"
         @change-master-password="changeMasterPassword"
+        @feedback="openFeedback"
         @close="closeSettings"
       />
     </fieldset>

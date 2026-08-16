@@ -9,6 +9,7 @@
   "permissions": [
     "core:event:default",
     "dialog:allow-open",
+    "opener:allow-open-url",
     "allow-load-config",
     "allow-save-config",
     "allow-load-preferences",

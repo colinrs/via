@@ -163,4 +163,12 @@ describe('SettingsDialog', () => {
       wrapper.find('[data-testid="change-master-password"]').exists()
     ).toBe(false)
   })
+
+  it('emits a feedback request when the feedback button is clicked', async () => {
+    const wrapper = mountDialog()
+
+    await wrapper.get('[data-testid="open-feedback"]').trigger('click')
+
+    expect(wrapper.emitted('feedback')).toEqual([[]])
+  })
 })

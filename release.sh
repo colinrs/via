@@ -337,6 +337,30 @@ NODE
 
   success "Cargo.toml → $VERSION"
 
+  if [[ -f "src-tauri/Cargo.lock" ]]; then
+
+    info "Updating Cargo.lock..."
+
+    node - "$VERSION" <<'NODE'
+const fs = require("fs");
+
+const version = process.argv[2];
+const file = "src-tauri/Cargo.lock";
+
+let content = fs.readFileSync(file, "utf8");
+
+content = content.replace(
+  /(name = "via"\nversion = )"[^"]+"/,
+  `$1"${version}"`
+);
+
+fs.writeFileSync(file, content);
+NODE
+
+    success "Cargo.lock → $VERSION"
+
+  fi
+
 fi
 
 # ------------------------------------------------------------
@@ -544,6 +568,10 @@ git add \
 
 if [[ -f "src-tauri/Cargo.toml" ]]; then
   git add src-tauri/Cargo.toml
+fi
+
+if [[ -f "src-tauri/Cargo.lock" ]]; then
+  git add src-tauri/Cargo.lock
 fi
 
 if [[ -f "package-lock.json" ]]; then

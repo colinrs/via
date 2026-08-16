@@ -107,7 +107,10 @@ export interface ViaStore {
     recoveryCode: string,
     newMasterPassword: string
   ): Promise<string[]>
-  saveRecoveryCodes(defaultFileName: string, content: string): Promise<string | null>
+  saveRecoveryCodes(
+    defaultFileName: string,
+    content: string
+  ): Promise<string | null>
   saveSessionSecret(sessionId: string, secret: string): Promise<void>
   connectSession(sessionId: string): Promise<void>
   disconnectSession(sessionId: string): Promise<void>

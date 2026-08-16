@@ -97,7 +97,9 @@ pub async fn save_recovery_codes(
     let Some(file_path) = picked else {
         return Ok(None);
     };
-    let path = file_path.into_path().map_err(|error| format!("{error:?}"))?;
+    let path = file_path
+        .into_path()
+        .map_err(|error| format!("{error:?}"))?;
     std::fs::write(&path, content).map_err(|error| format!("{error:?}"))?;
     Ok(Some(path.to_string_lossy().into_owned()))
 }

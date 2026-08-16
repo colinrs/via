@@ -72,8 +72,10 @@ describe('RecoveryCodesDialog', () => {
     expect(wrapper.emitted('download')).toHaveLength(1)
 
     expect(
-      (wrapper.get('[data-testid="close-recovery-codes"]').element as HTMLButtonElement)
-        .disabled
+      (
+        wrapper.get('[data-testid="close-recovery-codes"]')
+          .element as HTMLButtonElement
+      ).disabled
     ).toBe(true)
   })
 })

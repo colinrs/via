@@ -331,9 +331,9 @@ describe('ViaStore', () => {
         listen: vi.fn(),
       } as ViaBridge)
 
-      await expect(
-        store.saveRecoveryCodes('x.txt', 'A1')
-      ).rejects.toThrow('invalid save path')
+      await expect(store.saveRecoveryCodes('x.txt', 'A1')).rejects.toThrow(
+        'invalid save path'
+      )
     }
   })
 

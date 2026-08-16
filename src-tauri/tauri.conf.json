@@ -25,10 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "app",
-      "dmg"
-    ],
+    "targets": "all",
     "copyright": "Copyright © 2026 Via contributors",
     "category": "DeveloperTool",
     "icon": [

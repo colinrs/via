@@ -1,6 +1,7 @@
 use crate::app_state::AppState;
 use serde::Serialize;
 use tauri::State;
+use tauri_plugin_dialog::DialogExt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,4 +81,23 @@ pub fn approve_host_key(
         .trust
         .approve(&host, port, &algorithm, &fingerprint)
         .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+pub async fn save_recovery_codes(
+    app: tauri::AppHandle,
+    default_file_name: String,
+    content: String,
+) -> Result<Option<String>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .set_file_name(default_file_name.as_str())
+        .blocking_save_file();
+    let Some(file_path) = picked else {
+        return Ok(None);
+    };
+    let path = file_path.into_path().map_err(|error| format!("{error:?}"))?;
+    std::fs::write(&path, content).map_err(|error| format!("{error:?}"))?;
+    Ok(Some(path.to_string_lossy().into_owned()))
 }

@@ -25,6 +25,7 @@
     "allow-unlock-secrets",
     "allow-recover-secrets",
     "allow-change-master-password",
+    "allow-save-recovery-codes",
     "allow-lock-secrets",
     "allow-approve-host-key",
     "allow-connect-session",

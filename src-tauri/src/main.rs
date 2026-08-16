@@ -27,6 +27,7 @@ fn main() {
             via::commands::security::recover_secrets,
             via::commands::security::change_master_password,
             via::commands::security::lock_secrets,
+            via::commands::security::save_recovery_codes,
             via::commands::security::approve_host_key,
             via::commands::tunnels::connect_session,
             via::commands::tunnels::disconnect_session,

@@ -8,7 +8,7 @@ APP_BUNDLE := $(TAURI_DIR)/target/release/bundle/macos/Via.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build format test lint check package clean clean-all
+.PHONY: help install dev build format test lint check bench package clean clean-all
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -33,6 +33,9 @@ test: ## Run all frontend and Rust tests.
 	$(CARGO) fmt --manifest-path $(TAURI_DIR)/Cargo.toml --check
 	$(CARGO) clippy --manifest-path $(TAURI_DIR)/Cargo.toml --all-targets -- -D warnings
 	$(CARGO) test --manifest-path $(TAURI_DIR)/Cargo.toml -- --test-threads=1
+
+bench: ## Run Rust benchmarks (cargo bench).
+	$(CARGO) bench --manifest-path $(TAURI_DIR)/Cargo.toml
 
 check: ## Run the same quality checks as CI without producing a frontend bundle.
 	$(NPM) run typecheck

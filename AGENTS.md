@@ -11,6 +11,7 @@ The Rust backend is under `src-tauri/src/`. Keep IPC handlers in `commands/`, mo
 - `make install`: install pinned frontend dependencies with `npm ci`.
 - `make dev`: launch the Vite server and Tauri desktop window.
 - `make check`: run TypeScript checks plus Rust `check` and Clippy.
+- `make lint`: static-check TypeScript (Prettier, typecheck) and Rust (`cargo fmt --check`, Clippy) without running tests.
 - `make test`: run Vitest, type checking, `cargo fmt --check`, Clippy with warnings denied, and Rust tests.
 - `make build`: build the frontend and Rust binary.
 - `make format`: format TypeScript (Prettier) and Rust (`cargo fmt`).
@@ -19,7 +20,7 @@ The Rust backend is under `src-tauri/src/`. Keep IPC handlers in `commands/`, mo
 
 Use Node.js 22+, stable Rust, Xcode Command Line Tools, and Tauri CLI 2.
 
-After finishing development, run `make format` and `make build` before committing.
+After finishing development, run `make format`, `make lint`, and `make build` before committing.
 
 ## Coding Style & Naming Conventions
 

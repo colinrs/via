@@ -17,13 +17,14 @@ make install    # npm ci (pinned dependencies)
 make dev        # Tauri dev window; Vite dev server on port 1420
 make test       # full gate: vitest + vue-tsc typecheck + cargo fmt --check + clippy -D warnings + cargo test
 make check      # fast static check: typecheck + cargo check + clippy -D warnings
+make lint       # static check: prettier --check + vue-tsc typecheck + cargo fmt --check + clippy -D warnings
 make build      # npm run build + cargo build
 make format     # prettier (TS/Vue/JSON) + cargo fmt (Rust)
 make package    # tauri build + local ad-hoc codesign into src-tauri/target/release/bundle/macos/
 make clean      # remove dist/ and Rust target
 ```
 
-Run one frontend test: `npx vitest run src/App.spec.ts` (specs are colocated as `*.spec.ts`). Run one Rust test: `cargo test --manifest-path src-tauri/Cargo.toml <test-name>` (integration tests live in `src-tauri/tests/`). Run `make test` before committing. After finishing development, also run `make format` (Prettier for TypeScript + `cargo fmt` for Rust) and `make build` before committing.
+Run one frontend test: `npx vitest run src/App.spec.ts` (specs are colocated as `*.spec.ts`). Run one Rust test: `cargo test --manifest-path src-tauri/Cargo.toml <test-name>` (integration tests live in `src-tauri/tests/`). Run `make test` before committing. After finishing development, also run `make format` (Prettier for TypeScript + `cargo fmt` for Rust), `make lint`, and `make build` before committing.
 
 ## Architecture
 

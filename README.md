@@ -148,3 +148,6 @@ make test
 make format
 make build
 ```
+
+## Benchmark
+![benchmark](./assets/benchmark.png)

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Via · 数据面性能 Benchmark</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink-strong: #0b0b0b;
+    --ink: #52514e;
+    --ink-muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --hairline: rgba(11, 11, 11, 0.10);
+    --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink-strong: #ffffff;
+      --ink: #c3c2b7;
+      --ink-muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --hairline: rgba(255, 255, 255, 0.10);
+      --accent: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink-strong: #ffffff;
+    --ink: #c3c2b7;
+    --ink-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --hairline: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink-strong);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 40px 24px 64px; }
+
+  .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .kicker {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin: 0 0 8px;
+  }
+  h1 { font-size: 28px; line-height: 1.2; margin: 0; font-weight: 650; }
+  .subtitle { color: var(--ink); font-size: 14px; margin: 10px 0 0; max-width: 560px; }
+
+  .actions { flex: none; display: flex; gap: 8px; }
+  button.pill {
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button.pill:hover { color: var(--ink-strong); }
+
+  .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 32px 0 40px; }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    padding: 20px 22px;
+  }
+  .tile .label { font-size: 13px; color: var(--ink); margin: 0 0 6px; }
+  .tile .value { font-size: 40px; font-weight: 650; letter-spacing: -0.01em; margin: 0; line-height: 1.05; }
+  .tile .value .unit { font-size: 20px; font-weight: 550; color: var(--ink); margin-left: 4px; }
+  .tile .note { font-size: 12.5px; color: var(--ink-muted); margin: 8px 0 0; }
+
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    padding: 24px 24px 20px;
+    margin-bottom: 20px;
+  }
+  .section h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .section .hint { font-size: 12.5px; color: var(--ink-muted); margin: 0 0 18px; }
+
+  /* ---- horizontal bar chart ---- */
+  .chart { position: relative; }
+  .chart .gridlines {
+    position: absolute;
+    top: 0;
+    bottom: 26px;
+    left: 64px;
+    right: 88px;
+    pointer-events: none;
+  }
+  .chart .gridlines i {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--grid);
+  }
+  .chart .row { display: flex; align-items: center; margin-bottom: 16px; }
+  .chart .row:last-of-type { margin-bottom: 0; }
+  .chart .label {
+    width: 64px;
+    flex: none;
+    text-align: right;
+    padding-right: 14px;
+    font-size: 13px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .chart .track { flex: 1; height: 20px; }
+  .chart .bar {
+    height: 20px;
+    background: var(--accent);
+    border-radius: 0 4px 4px 0; /* square at baseline, 4px rounded data-end */
+    min-width: 2px;
+  }
+  .chart .val {
+    width: 88px;
+    flex: none;
+    padding-left: 14px;
+    font-size: 13px;
+    color: var(--ink-strong);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .chart .axis {
+    position: relative;
+    margin: 6px 88px 0 64px;
+    height: 20px;
+    border-top: 1px solid var(--axis);
+  }
+  .chart .tick {
+    position: absolute;
+    top: 4px;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- table ---- */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--grid); }
+  th {
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--axis);
+  }
+  td.num { font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  td .metric { color: var(--ink-strong); font-weight: 550; }
+  td .sub { color: var(--ink-muted); font-size: 12px; }
+
+  .method { font-size: 12.5px; color: var(--ink-muted); margin-top: 20px; }
+
+  @media (max-width: 560px) {
+    .kpis { grid-template-columns: 1fr; }
+    .tile .value { font-size: 32px; }
+    .chart .gridlines { left: 52px; right: 76px; }
+    .chart .label { width: 52px; }
+    .chart .val { width: 76px; }
+    .chart .axis { margin: 6px 76px 0 52px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <p class="kicker" data-i18n="kicker">Via · 本地 SSH 端口转发</p>
+      <h1 data-i18n="title">数据面性能 Benchmark</h1>
+      <p class="subtitle" data-i18n="subtitle"></p>
+    </div>
+    <div class="actions">
+      <button class="pill" id="lang" type="button">EN</button>
+      <button class="pill" id="theme" type="button">🌙 深色</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="tile">
+      <p class="label" data-i18n="kpi.throughput.label">峰值单向吞吐量</p>
+      <p class="value">3.08<span class="unit">GiB/s</span></p>
+      <p class="note" data-i18n="kpi.throughput.note">16 MiB 批量 · 中位数</p>
+    </div>
+    <div class="tile">
+      <p class="label" data-i18n="kpi.latency.label">数据面往返延迟</p>
+      <p class="value">32.5<span class="unit">µs</span></p>
+      <p class="note" data-i18n="kpi.latency.note">1 字节 echo · 中位数</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 data-i18n="chart.title">单向吞吐量（按批量大小）</h2>
+    <p class="hint" data-i18n="chart.hint">越大越好 · 单位 GiB/s · 水平轴 0–3.5</p>
+    <div class="chart">
+      <div class="gridlines" aria-hidden="true">
+        <i style="left: 0%"></i>
+        <i style="left: 28.571%"></i>
+        <i style="left: 57.143%"></i>
+        <i style="left: 85.714%"></i>
+      </div>
+      <div class="row">
+        <span class="label">1 MiB</span>
+        <div class="track"><div class="bar" style="width: 78%"></div></div>
+        <span class="val">2.73 GiB/s</span>
+      </div>
+      <div class="row">
+        <span class="label">16 MiB</span>
+        <div class="track"><div class="bar" style="width: 88%"></div></div>
+        <span class="val">3.08 GiB/s</span>
+      </div>
+      <div class="axis" aria-hidden="true">
+        <span class="tick" style="left: 0%">0</span>
+        <span class="tick" style="left: 28.571%">1</span>
+        <span class="tick" style="left: 57.143%">2</span>
+        <span class="tick" style="left: 85.714%">3</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 data-i18n="table.title">原始数据</h2>
+    <p class="hint" data-i18n="table.hint">Criterion 中位数</p>
+    <table>
+      <thead>
+        <tr>
+          <th data-i18n="th.metric">指标</th>
+          <th class="num" data-i18n="th.time">单次耗时</th>
+          <th class="num" data-i18n="th.throughput">吞吐量</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="metric" data-i18n="row.throughput">单向吞吐量</span> <span class="sub" data-i18n="sub.1mib">· 1 MiB 批量</span></td>
+          <td class="num">357 µs</td>
+          <td class="num">2.73 GiB/s</td>
+        </tr>
+        <tr>
+          <td><span class="metric" data-i18n="row.throughput">单向吞吐量</span> <span class="sub" data-i18n="sub.16mib">· 16 MiB 批量</span></td>
+          <td class="num">5.08 ms</td>
+          <td class="num">3.08 GiB/s</td>
+        </tr>
+        <tr>
+          <td><span class="metric" data-i18n="row.latency">往返延迟</span> <span class="sub" data-i18n="sub.echo">· 1 字节 echo</span></td>
+          <td class="num">32.5 µs</td>
+          <td class="num">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="method" data-i18n="method"></p>
+</div>
+
+<script>
+  const I18N = {
+    zh: {
+      lang: "zh-CN",
+      title: "数据面性能 Benchmark",
+      kicker: "Via · 本地 SSH 端口转发",
+      subtitle: "在 127.0.0.1 回环上，穿过真实 Forwarder 数据路径（accept 循环 + copy_bidirectional）测得，使用 mock SSH 会话，无真实 SSH。",
+      "kpi.throughput.label": "峰值单向吞吐量",
+      "kpi.throughput.note": "16 MiB 批量 · 中位数",
+      "kpi.latency.label": "数据面往返延迟",
+      "kpi.latency.note": "1 字节 echo · 中位数",
+      "chart.title": "单向吞吐量（按批量大小）",
+      "chart.hint": "越大越好 · 单位 GiB/s · 水平轴 0–3.5",
+      "table.title": "原始数据",
+      "table.hint": "Criterion 中位数",
+      "th.metric": "指标",
+      "th.time": "单次耗时",
+      "th.throughput": "吞吐量",
+      "row.throughput": "单向吞吐量",
+      "row.latency": "往返延迟",
+      "sub.1mib": "· 1 MiB 批量",
+      "sub.16mib": "· 16 MiB 批量",
+      "sub.echo": "· 1 字节 echo",
+      method: "方法：Criterion 0.8 · macOS · 127.0.0.1 回环 · 持久连接（避免 TIME_WAIT 端口耗尽）· mock AuthenticatedSession 直连进程内 TCP sink/echo · tokio copy_bidirectional。代码见 src-tauri/benches/forwarder.rs，运行 make bench。"
+    },
+    en: {
+      lang: "en",
+      title: "Data-plane Performance Benchmark",
+      kicker: "Via · Local SSH forwarding",
+      subtitle: "Measured on 127.0.0.1 loopback through the real Forwarder data path (accept loop + copy_bidirectional), using a mock SSH session — no real SSH.",
+      "kpi.throughput.label": "Peak unidirectional throughput",
+      "kpi.throughput.note": "16 MiB batch · median",
+      "kpi.latency.label": "Data-plane round-trip latency",
+      "kpi.latency.note": "1-byte echo · median",
+      "chart.title": "Unidirectional throughput (by batch size)",
+      "chart.hint": "Higher is better · GiB/s · x-axis 0–3.5",
+      "table.title": "Raw data",
+      "table.hint": "Criterion median",
+      "th.metric": "Metric",
+      "th.time": "Duration",
+      "th.throughput": "Throughput",
+      "row.throughput": "Unidirectional throughput",
+      "row.latency": "Round-trip latency",
+      "sub.1mib": "· 1 MiB batch",
+      "sub.16mib": "· 16 MiB batch",
+      "sub.echo": "· 1-byte echo",
+      method: "Method: Criterion 0.8 · macOS · 127.0.0.1 loopback · persistent connection (avoids TIME_WAIT port exhaustion) · mock AuthenticatedSession dialing an in-process TCP sink/echo · tokio copy_bidirectional. Code in src-tauri/benches/forwarder.rs; run make bench."
+    }
+  };
+
+  const root = document.documentElement;
+  const langBtn = document.getElementById('lang');
+  const themeBtn = document.getElementById('theme');
+  let lang = 'zh';
+
+  function applyLang() {
+    const d = I18N[lang];
+    root.lang = d.lang;
+    document.title = d.title;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.dataset.i18n;
+      if (d[key] !== undefined) el.textContent = d[key];
+    });
+  }
+
+  function renderButtons() {
+    const dark = root.getAttribute('data-theme') === 'dark';
+    langBtn.textContent = lang === 'zh' ? 'EN' : '中文';
+    themeBtn.textContent = dark
+      ? (lang === 'zh' ? '☀️ 浅色' : '☀️ Light')
+      : (lang === 'zh' ? '🌙 深色' : '🌙 Dark');
+    themeBtn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+  }
+
+  langBtn.addEventListener('click', () => {
+    lang = lang === 'zh' ? 'en' : 'zh';
+    applyLang();
+    renderButtons();
+  });
+
+  themeBtn.addEventListener('click', () => {
+    root.setAttribute('data-theme', root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    renderButtons();
+  });
+
+  applyLang();
+  renderButtons();
+</script>
+</body>
+</html>

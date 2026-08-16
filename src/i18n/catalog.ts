@@ -70,6 +70,7 @@ const en = {
   'action.replaceAll': 'Replace all',
   'action.copyJson': 'Copy JSON',
   'action.iSaved': 'I saved it',
+  'action.downloadRecoveryCodes': 'Download',
   'action.fillExample': 'Fill example',
   'field.sessionName': 'Session name',
   'field.hostAddress': 'Host address',
@@ -180,6 +181,8 @@ const en = {
   'success.groupDeleted': 'Group deleted',
   'success.imported': 'Configuration imported',
   'success.exported': 'Configuration copied to clipboard',
+  'success.changePassword': 'Master password changed',
+  'success.recoveryCodesDownloaded': 'Recovery codes saved',
   'message.noMatchingRules': 'No matching forwarding rules',
   'message.portConflictTitle': 'Port conflict:',
   'message.portConflict':
@@ -211,6 +214,7 @@ const en = {
     'The master password is incorrect and local credentials could not be unlocked.',
   'error.recoverCredentials':
     'Could not recover local credentials. Check the recovery code and try again.',
+  'error.saveRecoveryCodes': 'Failed to save recovery codes.',
   'error.readConfig': 'Could not read configuration.',
   'error.processConfig':
     'Could not process configuration. Check the JSON content and fields.',
@@ -292,6 +296,7 @@ const zhCN: { [Key in TranslationKey]: string } = {
   'action.replaceAll': '覆盖全部',
   'action.copyJson': '复制 JSON',
   'action.iSaved': '我已保存',
+  'action.downloadRecoveryCodes': '下载',
   'action.fillExample': '填入示例',
   'field.sessionName': '会话名称',
   'field.hostAddress': '主机地址',
@@ -399,6 +404,8 @@ const zhCN: { [Key in TranslationKey]: string } = {
   'success.groupDeleted': '分组已删除',
   'success.imported': '配置已导入',
   'success.exported': '配置已复制到剪贴板',
+  'success.changePassword': '主密码已修改',
+  'success.recoveryCodesDownloaded': '恢复码已保存',
   'message.noMatchingRules': '未找到匹配的转发规则',
   'message.portConflictTitle': '端口冲突：',
   'message.portConflict':
@@ -421,6 +428,7 @@ const zhCN: { [Key in TranslationKey]: string } = {
   'error.initializeCredentials': '初始化本地凭据失败，请重试。',
   'error.unlockCredentials': '主密码不正确，无法解锁本地凭据。',
   'error.recoverCredentials': '恢复本地凭据失败，请检查恢复码后重试。',
+  'error.saveRecoveryCodes': '保存恢复码失败。',
   'error.readConfig': '无法读取配置。',
   'error.processConfig': '配置处理失败，请确认 JSON 内容和字段。',
   'error.createGroup': '创建分组失败，请重试。',
